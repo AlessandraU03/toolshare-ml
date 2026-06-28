@@ -15,3 +15,8 @@ dataset_raw/
 *.keras
 *.pt
 *.pth
+
+# Forzar inclusión de modelos activos para despliegue
+!models/baseline_best.keras
+!models/modelo_devaluacion.pkl
+!models/buscador_nlp.pkl
