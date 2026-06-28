@@ -46,92 +46,218 @@ def preprocesar_texto(texto: str) -> str:
 # CAPA DE INFRAESTRUCTURA: Consulta API Pública de Mercado Libre México
 # ============================================================================
 MERCADOLIBRE_API_BASE = "https://api.mercadolibre.com/sites/MLM/search"
+TOKEN_CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "token_cache.json")
 
-def consultar_precio_mercadolibre(termino_busqueda: str, limite: int = 10, access_token: str = None) -> dict:
-    """
-    Consulta la API pública de Mercado Libre México (sitio MLM) para obtener
-    precios reales de mercado de herramientas.
-    """
-    if not access_token:
-        access_token = os.getenv("MP_ACCESS_TOKEN") or os.getenv("ML_ACCESS_TOKEN")
+# Credenciales fijas de la aplicación de Mercado Libre para renovación automática
+ML_CLIENT_ID = "926235533095636"
+ML_CLIENT_SECRET = "JMv87pkthRKHv1w2e6XOrWxIRy17N5ON"
+ML_INITIAL_REFRESH_TOKEN = "TG-6a41a0ed7882eb0001b6a5a8-1553007430"
 
+import time
+import json
+
+def obtener_y_refrescar_token() -> str:
+    """
+    Gestiona de forma automática la obtención y renovación del Access Token de Mercado Libre.
+    Guarda los tokens actualizados en un archivo local para que persistan entre reinicios.
+    """
+    cache = {}
+    if os.path.exists(TOKEN_CACHE_FILE):
+        try:
+            with open(TOKEN_CACHE_FILE, "r") as f:
+                cache = json.load(f)
+        except Exception as e:
+            logger.error(f"Error al leer token_cache.json: {e}")
+
+    access_token = cache.get("access_token")
+    refresh_token = cache.get("refresh_token") or ML_INITIAL_REFRESH_TOKEN
+    expires_at = cache.get("expires_at", 0)
+
+    # Si el token sigue siendo válido (con margen de 5 minutos), lo retornamos
+    if access_token and time.time() < (expires_at - 300):
+        return access_token
+
+    logger.info("El Access Token de Mercado Libre ha expirado o no existe. Solicitando renovación...")
     try:
-        params = {
-            "q": termino_busqueda,
-            "limit": limite,
-            "sort": "relevance"
-        }
-        
+        url = "https://api.mercadolibre.com/oauth/token"
         headers = {
             "Accept": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+        data = {
+            "grant_type": "refresh_token",
+            "client_id": ML_CLIENT_ID,
+            "client_secret": ML_CLIENT_SECRET,
+            "refresh_token": refresh_token
+        }
+        
+        response = requests.post(url, headers=headers, data=data, timeout=5)
+        
+        if response.status_code == 200:
+            res_data = response.json()
+            nuevo_access = res_data.get("access_token")
+            nuevo_refresh = res_data.get("refresh_token")
+            expires_in = res_data.get("expires_in", 21600)
+            
+            if nuevo_access:
+                nuevo_cache = {
+                    "access_token": nuevo_access,
+                    "refresh_token": nuevo_refresh or refresh_token,
+                    "expires_at": int(time.time() + expires_in)
+                }
+                with open(TOKEN_CACHE_FILE, "w") as f:
+                    json.dump(nuevo_cache, f)
+                logger.info("Access Token de Mercado Libre renovado y guardado en token_cache.json.")
+                return nuevo_access
+        else:
+            logger.error(f"Error al refrescar token. Código {response.status_code}: {response.text}")
+            
+    except Exception as e:
+        logger.error(f"Excepción al intentar renovar el token: {e}")
+
+    return access_token or os.getenv("MP_ACCESS_TOKEN")
+
+def consultar_precio_mercadolibre(termino_busqueda: str, limite: int = 10, access_token: str = None, sector: str = None) -> dict:
+    """
+    Consulta la API pública de Mercado Libre México (sitio MLM) utilizando
+    el flujo autorizado de Highlights y Product Items, evitando el error 403 del buscador.
+    """
+    if not access_token:
+        access_token = obtener_y_refrescar_token()
+
+    if not access_token or not access_token.strip():
+        logger.warning("No se pudo obtener un Access Token de Mercado Libre válido. Usando fallback...")
+        return None
+
+    # Mapeo de Sector a ID de Categoría de Mercado Libre MLM
+    sector_map = {
+        "manual": "MLM2527",       # Herramientas Manuales
+        "electrico": "MLM2526",    # Herramientas Eléctricas
+        "neumatico": "MLM438028",   # Herramientas Neumáticas
+        "medicion": "MLM151548",    # Herramientas de Medición
+        "jardin": "MLM189258",      # Herramientas de Jardín
+        "industrial": "MLM187729",  # Herramientas Industriales
+        "corte": "MLM178354",       # Accesorios/Corte
+    }
+
+    # Intentar obtener la categoría desde el parámetro sector
+    cat_id = None
+    if sector:
+        sector_clean = preprocesar_texto(sector).lower()
+        # Búsqueda aproximada en el mapa
+        for k, v in sector_map.items():
+            if k in sector_clean or sector_clean in k:
+                cat_id = v
+                break
+
+    # Si no hay sector o no coincide, intentar inferir por palabras clave del término de búsqueda
+    if not cat_id:
+        query_clean = preprocesar_texto(termino_busqueda).lower()
+        if any(kw in query_clean for kw in ["pinza", "desarmador", "llave", "martillo", "alicate", "cizalla", "manual"]):
+            cat_id = "MLM2527"
+        elif any(kw in query_clean for kw in ["neumat", "piston", "soplador", "compresor"]):
+            cat_id = "MLM438028"
+        elif any(kw in query_clean for kw in ["medidor", "multimetro", "nivel", "flexometro", "calibrador", "medicion"]):
+            cat_id = "MLM151548"
+        elif any(kw in query_clean for kw in ["podadora", "motosierra", "desbrozadora", "cortasetos", "jardin"]):
+            cat_id = "MLM189258"
+        elif any(kw in query_clean for kw in ["soldadora", "torno", "esmeril", "taladro", "rotomartillo", "electrico"]):
+            cat_id = "MLM2526"
+
+    # Si sigue sin coincidir, usar la categoría raíz de Herramientas
+    if not cat_id:
+        cat_id = "MLM186863"
+
+    try:
+        headers = {
+            "Accept": "application/json",
+            "Authorization": f"Bearer {access_token}",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
-        if access_token and access_token.strip():
-            headers["Authorization"] = f"Bearer {access_token}"
-            
-        response = requests.get(
-            MERCADOLIBRE_API_BASE,
-            params=params,
-            timeout=5,
-            headers=headers
-        )
+
+        # 1. Obtener destacados de la categoría
+        highlights_url = f"https://api.mercadolibre.com/highlights/MLM/category/{cat_id}"
+        response = requests.get(highlights_url, headers=headers, timeout=5)
         
         if response.status_code != 200:
-            logger.warning(f"API de Mercado Libre respondió con status {response.status_code}")
-            if response.status_code == 403:
-                logger.warning(
-                    "Mercado Libre retornó 403 Forbidden. Para habilitar consultas reales en desarrollo, "
-                    "asegúrate de registrar un token válido configurando MP_ACCESS_TOKEN en tu archivo .env."
-                )
+            logger.warning(f"Error consultando highlights: {response.status_code}")
             return None
+
+        products = response.json().get('content', [])
         
-        datos = response.json()
-        resultados = datos.get('results', [])
-        
-        if not resultados:
-            logger.info(f"Sin resultados en Mercado Libre para: '{termino_busqueda}'")
-            return None
-        
-        # Extraer precios válidos (solo artículos con precio > 0 y en MXN)
         precios = []
-        productos = []
-        for item in resultados:
-            precio = item.get('price', 0)
-            moneda = item.get('currency_id', 'MXN')
-            titulo = item.get('title', 'Sin título')
-            condicion = item.get('condition', 'no_especificada')
-            
-            if precio and precio > 0 and moneda == 'MXN':
-                precios.append(precio)
-                productos.append({
-                    "titulo": titulo,
-                    "precio": precio,
-                    "condicion": condicion,
-                    "moneda": moneda
-                })
-        
+        productos_ref = []
+        keywords = [k for k in preprocesar_texto(termino_busqueda).lower().split() if len(k) > 2]
+
+        # 2. Analizar productos destacados para encontrar coincidencias de palabras clave
+        for prod in products[:12]:  # Top 12 para evitar exceso de peticiones
+            prod_id = prod['id']
+            if prod['type'] == 'PRODUCT':
+                # Obtener detalles del producto del catálogo
+                detail_url = f"https://api.mercadolibre.com/products/{prod_id}"
+                r_detail = requests.get(detail_url, headers=headers, timeout=3)
+                if r_detail.status_code != 200:
+                    continue
+                
+                prod_data = r_detail.json()
+                name = prod_data.get('name', '')
+                name_clean = preprocesar_texto(name).lower()
+
+                # Verificar si coincide con palabras clave de búsqueda
+                is_match = not keywords or any(kw in name_clean for kw in keywords)
+
+                if is_match:
+                    # Obtener ofertas activas asociadas a este producto
+                    items_url = f"https://api.mercadolibre.com/products/{prod_id}/items"
+                    r_items = requests.get(items_url, headers=headers, timeout=3)
+                    if r_items.status_code == 200:
+                        results = r_items.json().get('results', [])
+                        for res in results:
+                            price = res.get('price')
+                            currency = res.get('currency_id', 'MXN')
+                            if price and price > 0 and currency == 'MXN':
+                                precios.append(price)
+                                if len(productos_ref) < 5:
+                                    productos_ref.append({
+                                        "titulo": name,
+                                        "precio": price,
+                                        "condicion": "new",
+                                        "moneda": "MXN"
+                                    })
+
+        # 3. Fallback: Si no hay coincidencias directas, sacar promedio de los destacados de la categoría
+        if not precios:
+            logger.info("Sin coincidencias exactas por palabra clave. Extrayendo promedio de la categoría...")
+            for prod in products[:5]:
+                items_url = f"https://api.mercadolibre.com/products/{prod['id']}/items"
+                r_items = requests.get(items_url, headers=headers, timeout=3)
+                if r_items.status_code == 200:
+                    results = r_items.json().get('results', [])
+                    for res in results:
+                        price = res.get('price')
+                        if price and price > 0:
+                            precios.append(price)
+
         if not precios:
             return None
-        
+
+        precios.sort()
+        n = len(precios)
+        mediana = precios[n // 2] if n % 2 != 0 else (precios[n // 2 - 1] + precios[n // 2]) / 2
+
         return {
-            "precio_promedio": round(sum(precios) / len(precios), 2),
+            "precio_promedio": round(sum(precios) / n, 2),
             "precio_minimo": round(min(precios), 2),
             "precio_maximo": round(max(precios), 2),
-            "precio_mediana": round(sorted(precios)[len(precios) // 2], 2),
-            "total_resultados": datos.get('paging', {}).get('total', len(resultados)),
-            "muestras_analizadas": len(precios),
-            "fuente": "mercadolibre_api_publica",
-            "productos": productos[:5]  # Top 5 para referencia
+            "precio_mediana": round(mediana, 2),
+            "total_resultados": n,
+            "muestras_analizadas": n,
+            "fuente": "mercadolibre_api_destacados",
+            "productos": productos_ref
         }
-        
-    except requests.exceptions.Timeout:
-        logger.warning("Timeout al consultar API de Mercado Libre")
-        return None
-    except requests.exceptions.ConnectionError:
-        logger.warning("Error de conexión con API de Mercado Libre")
-        return None
+
     except Exception as e:
-        logger.error(f"Error inesperado consultando Mercado Libre: {e}")
+        logger.error(f"Error consultando precios en vivo de Mercado Libre: {e}")
         return None
 
 # ============================================================================
@@ -354,7 +480,7 @@ def auto_valuate(
         raise HTTPException(status_code=503, detail="Modelo de regresión no cargado en el servidor")
 
     # PASO 1: Consultar precio base de mercado en Mercado Libre
-    datos_mercado = consultar_precio_mercadolibre(nombre_herramienta, limite=10, access_token=access_token)
+    datos_mercado = consultar_precio_mercadolibre(nombre_herramienta, limite=10, access_token=access_token, sector=sector)
 
     precio_base = None
     fuente_precio = "no_disponible"
