@@ -52,6 +52,9 @@ def consultar_precio_mercadolibre(termino_busqueda: str, limite: int = 10, acces
     Consulta la API pública de Mercado Libre México (sitio MLM) para obtener
     precios reales de mercado de herramientas.
     """
+    if not access_token:
+        access_token = os.getenv("MP_ACCESS_TOKEN") or os.getenv("ML_ACCESS_TOKEN")
+
     try:
         params = {
             "q": termino_busqueda,
@@ -498,4 +501,7 @@ def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 8000))
+    # Desactivar reload en producción (cuando existe la variable PORT) para mayor estabilidad
+    reload_mode = os.environ.get("PORT") is None
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=reload_mode)
