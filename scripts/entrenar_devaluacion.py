@@ -4,7 +4,6 @@ import pickle
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
 
 from sklearn.model_selection import KFold, cross_validate
 from sklearn.compose import ColumnTransformer
@@ -24,13 +23,13 @@ if not os.path.exists(csv_path):
 df = pd.read_csv(csv_path)
 
 # Variables de entrada y de salida
-# Predeciremos el valor depreciado
-X = df[['precio_base_catalogo', 'score_condicion', 'sector_uso', 'marca']]
-y = df['valor_real_depreciado']
+# Predeciremos el precio base de catálogo y el valor depreciado simultáneamente (Multi-output Regression)
+X = df[['sector_uso', 'marca', 'tipo_herramienta', 'score_condicion']]
+y = df[['precio_base_catalogo', 'valor_real_depreciado']]
 
 # 2. Configurar preprocesamiento (ColumnTransformer)
-categorical_features = ['sector_uso', 'marca']
-numeric_features = ['precio_base_catalogo', 'score_condicion']
+categorical_features = ['sector_uso', 'marca', 'tipo_herramienta']
+numeric_features = ['score_condicion']
 
 preprocessor = ColumnTransformer(
     transformers=[
@@ -123,17 +122,17 @@ with open(model_save_path, 'wb') as f:
 
 print(f"\nModelo final guardado exitosamente en: {model_save_path}")
 
-# 6. Graficar comparación de R2 y RMSE
+# 6. Graficar comparación de R2 y RMSE (Usando matplotlib estándar para evitar dependencias extras)
 plt.figure(figsize=(12, 5))
 
 plt.subplot(1, 2, 1)
-sns.barplot(data=df_results, x='Val R2', y='Modelo', palette='viridis')
+plt.barh(df_results['Modelo'], df_results['Val R2'], color='skyblue')
 plt.title("Comparación de R² de Validación (Mayor es mejor)")
 plt.xlim(0.7, 1.0)
 plt.xlabel("R²")
 
 plt.subplot(1, 2, 2)
-sns.barplot(data=df_results, x='Val RMSE', y='Modelo', palette='magma')
+plt.barh(df_results['Modelo'], df_results['Val RMSE'], color='salmon')
 plt.title("Comparación de RMSE de Validación (Menor es mejor)")
 plt.xlabel("RMSE (MXN)")
 
