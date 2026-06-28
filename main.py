@@ -117,10 +117,10 @@ def obtener_y_refrescar_token() -> str:
 
     return access_token or os.getenv("MP_ACCESS_TOKEN")
 
-def consultar_precio_mercadolibre(termino_busqueda: str, limite: int = 10, access_token: str = None, sector: str = None) -> dict:
+def consultar_precio_mercadolibre(termino_busqueda: str, limite: int = 10, access_token: str = None, sector: str = None, marca: str = None) -> dict:
     """
     Consulta la API pública de Mercado Libre México (sitio MLM) utilizando
-    el flujo autorizado de Highlights y Product Items, evitando el error 403 del buscador.
+    el flujo de Highlights y Product Items, filtrando por marca y excluyendo accesorios baratos.
     """
     if not access_token:
         access_token = obtener_y_refrescar_token()
@@ -144,7 +144,6 @@ def consultar_precio_mercadolibre(termino_busqueda: str, limite: int = 10, acces
     cat_id = None
     if sector:
         sector_clean = preprocesar_texto(sector).lower()
-        # Búsqueda aproximada en el mapa
         for k, v in sector_map.items():
             if k in sector_clean or sector_clean in k:
                 cat_id = v
@@ -164,7 +163,6 @@ def consultar_precio_mercadolibre(termino_busqueda: str, limite: int = 10, acces
         elif any(kw in query_clean for kw in ["soldadora", "torno", "esmeril", "taladro", "rotomartillo", "electrico"]):
             cat_id = "MLM2526"
 
-    # Si sigue sin coincidir, usar la categoría raíz de Herramientas
     if not cat_id:
         cat_id = "MLM186863"
 
@@ -188,12 +186,16 @@ def consultar_precio_mercadolibre(termino_busqueda: str, limite: int = 10, acces
         precios = []
         productos_ref = []
         keywords = [k for k in preprocesar_texto(termino_busqueda).lower().split() if len(k) > 2]
+        
+        # Palabras clave de marca
+        brand_keywords = []
+        if marca and marca.strip().lower() not in ["generico", "genérico", "otro", ""]:
+            brand_keywords = [b for b in preprocesar_texto(marca).lower().split() if len(b) > 2]
 
-        # 2. Analizar productos destacados para encontrar coincidencias de palabras clave
-        for prod in products[:12]:  # Top 12 para evitar exceso de peticiones
+        # 2. Analizar productos destacados para encontrar coincidencias de palabras clave y marca
+        for prod in products[:12]:
             prod_id = prod['id']
             if prod['type'] == 'PRODUCT':
-                # Obtener detalles del producto del catálogo
                 detail_url = f"https://api.mercadolibre.com/products/{prod_id}"
                 r_detail = requests.get(detail_url, headers=headers, timeout=3)
                 if r_detail.status_code != 200:
@@ -203,11 +205,15 @@ def consultar_precio_mercadolibre(termino_busqueda: str, limite: int = 10, acces
                 name = prod_data.get('name', '')
                 name_clean = preprocesar_texto(name).lower()
 
-                # Verificar si coincide con palabras clave de búsqueda
+                # Verificar si coincide con palabras clave
                 is_match = not keywords or any(kw in name_clean for kw in keywords)
+                
+                # Si se especifica marca, obligar a que coincida con la marca
+                if is_match and brand_keywords:
+                    is_match = any(bk in name_clean for bk in brand_keywords)
 
                 if is_match:
-                    # Obtener ofertas activas asociadas a este producto
+                    # Obtener ofertas activas
                     items_url = f"https://api.mercadolibre.com/products/{prod_id}/items"
                     r_items = requests.get(items_url, headers=headers, timeout=3)
                     if r_items.status_code == 200:
@@ -215,6 +221,11 @@ def consultar_precio_mercadolibre(termino_busqueda: str, limite: int = 10, acces
                         for res in results:
                             price = res.get('price')
                             currency = res.get('currency_id', 'MXN')
+                            
+                            # Filtro de seguridad: excluir carbones, brocas o baterías sueltas (precios bajos en herramientas eléctricas)
+                            if cat_id in ["MLM2526", "MLM438028", "MLM187729"] and price < 500:
+                                continue
+                                
                             if price and price > 0 and currency == 'MXN':
                                 precios.append(price)
                                 if len(productos_ref) < 5:
@@ -225,9 +236,9 @@ def consultar_precio_mercadolibre(termino_busqueda: str, limite: int = 10, acces
                                         "moneda": "MXN"
                                     })
 
-        # 3. Fallback: Si no hay coincidencias directas, sacar promedio de los destacados de la categoría
+        # 3. Fallback general por categoría si no hubo coincidencia de marca/palabras clave
         if not precios:
-            logger.info("Sin coincidencias exactas por palabra clave. Extrayendo promedio de la categoría...")
+            logger.info("Sin coincidencias exactas con marca y palabras clave. Extrayendo destacados...")
             for prod in products[:5]:
                 items_url = f"https://api.mercadolibre.com/products/{prod['id']}/items"
                 r_items = requests.get(items_url, headers=headers, timeout=3)
@@ -235,6 +246,8 @@ def consultar_precio_mercadolibre(termino_busqueda: str, limite: int = 10, acces
                     results = r_items.json().get('results', [])
                     for res in results:
                         price = res.get('price')
+                        if cat_id in ["MLM2526", "MLM438028", "MLM187729"] and price < 500:
+                            continue
                         if price and price > 0:
                             precios.append(price)
 
