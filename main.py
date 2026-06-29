@@ -175,28 +175,46 @@ async def predict_condition(file: UploadFile = File(...)):
             img_val_arr = tf.keras.applications.mobilenet_v3.preprocess_input(img_val_arr)
             
             val_probs = validator_model.predict(img_val_arr, verbose=0)
-            decoded = tf.keras.applications.mobilenet_v3.decode_predictions(val_probs, top=3)[0]
+            decoded = tf.keras.applications.mobilenet_v3.decode_predictions(val_probs, top=5)[0]
             
-            # Palabras clave asociadas a herramientas, ferretería y construcción en ImageNet
+            # Palabras clave asociadas a herramientas, ferretería y objetos mecánicos/metálicos comunes
             palabras_herramienta = {
                 "drill", "hammer", "screwdriver", "saw", "pliers", "tool", "hatchet", "axe", "plane", 
                 "clamp", "vice", "chisel", "wrench", "rule", "ruler", "measure", "hardware", "tool", 
                 "spanner", "mallet", "anvil", "shears", "scissors", "shovel", "rake", "hoe", "scythe", 
                 "sickle", "wheelbarrow", "generator", "engine", "pump", "machine", "device", "gauge",
                 "screw", "nail", "nut", "hardware_store", "carpenter", "measuring", "scale", "barometer",
-                "joystick", "dial", "switch", "wire", "cable", "mask", "helmet", "safety", "goggles"
+                "joystick", "dial", "switch", "wire", "cable", "mask", "helmet", "safety", "goggles",
+                "corkscrew", "can_opener", "opener", "nutcracker", "combination_lock", "padlock", "key", 
+                "pincers", "forceps", "tongs", "tweezers", "nipper", "cutters", "clipper", "hook", "chain", 
+                "spring", "bar", "rod", "pipe", "tube", "revolver", "pistol", "gun", "lighter", "matchstick",
+                "stretcher", "plunger", "crowbar", "sledgehammer", "anvil", "file", "rasp", "spatula"
+            }
+            
+            # Clases comunes de fondo a ignorar
+            clases_fondo = {
+                "tile", "flooring", "wood", "table", "desk", "wall", "carpet", "rug", "mat", "floor", 
+                "concrete", "cement", "ground", "slate", "patio", "sidewalk", "pavement", "brick", "stone", "rock"
             }
             
             es_herramienta = False
             top_detectado = []
+            
             for _, class_name, prob in decoded:
                 prob_pct = prob * 100
                 top_detectado.append(f"{class_name} ({prob_pct:.1f}%)")
                 class_name_lower = class_name.lower().replace("_", " ")
+                
+                # Ignorar si es una clase de fondo (piso, pared, mesa)
+                if any(fondo in class_name_lower for fondo in clases_fondo):
+                    continue
+                    
+                # Si coincide con alguna palabra de herramienta o metal, es válida
                 if any(kw in class_name_lower for kw in palabras_herramienta):
                     es_herramienta = True
+                    break
             
-            # Si no se detectó ninguna herramienta con confianza aceptable, rechazar
+            # Si no se detectó ninguna herramienta en el top 5 (ignorando fondos), rechazar
             if not es_herramienta:
                 logger.warning(f"Imagen rechazada. Detectado: {top_detectado}")
                 detectado_legible = decoded[0][1].replace("_", " ").capitalize()
