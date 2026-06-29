@@ -124,7 +124,7 @@ print("Generando dataset a partir de los catálogos oficiales de construcción e
 random.seed(42)
 np.random.seed(42)
 
-num_samples = 1500
+num_samples = 6000
 records = []
 
 for _ in range(num_samples):

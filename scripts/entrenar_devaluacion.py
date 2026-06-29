@@ -44,7 +44,7 @@ models = {
     'Lasso (L1 Regularized)': Lasso(alpha=1.0),
     'Árbol de Decisión (Poda/max_depth=5)': DecisionTreeRegressor(max_depth=5, random_state=42),
     'Árbol de Decisión (Poda/max_depth=8)': DecisionTreeRegressor(max_depth=8, random_state=42),
-    'Random Forest Regressor': RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42)
+    'Random Forest Regressor': RandomForestRegressor(n_estimators=250, max_depth=20, random_state=42)
 }
 
 # 4. Evaluación usando Validación Cruzada (5-Fold CV)
@@ -100,8 +100,9 @@ for name, model in models.items():
 df_results = pd.DataFrame(results)
 
 # 5. Seleccionar y entrenar el mejor modelo final en todo el dataset
-best_model_name = df_results.sort_values(by='Val RMSE').iloc[0]['Modelo']
-print(f"\nEl mejor modelo seleccionado es: {best_model_name}")
+# Forzamos Random Forest Regressor por su capacidad de capturar relaciones no lineales complejas (como herramientas baratas de marcas caras)
+best_model_name = 'Random Forest Regressor'
+print(f"\nEl modelo seleccionado para producción es: {best_model_name}")
 
 best_model = models[best_model_name]
 final_pipeline = Pipeline(steps=[
