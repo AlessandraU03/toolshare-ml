@@ -112,6 +112,46 @@ def inferir_tipo_herramienta(nombre: str) -> str:
             return tipo
     return "Otros"
 
+TIPO_TO_SECTOR = {
+    "Rotomartillo": "Eléctrico",
+    "Taladro": "Eléctrico",
+    "Esmeriladora": "Eléctrico",
+    "Sierra": "Eléctrico",
+    "Mezcladora": "Eléctrico",
+    "Vibrador": "Eléctrico",
+    "Segueta": "Corte",
+    "Serrucho": "Corte",
+    "Cortadora": "Corte",
+    "Lijadora": "Acabado",
+    "Generador": "Energía",
+    "Soldadora": "Energía",
+    "Compresor": "Neumático",
+    "Clavadora": "Neumático",
+    "Martillo": "Manual",
+    "Mazo": "Manual",
+    "Marro": "Manual",
+    "Cincel": "Manual",
+    "Llana": "Manual",
+    "Espatula": "Manual",
+    "Cuchara": "Manual",
+    "Destornillador": "Manual",
+    "Llave": "Manual",
+    "Pinza": "Manual",
+    "Pistola": "Manual",
+    "Cepillo": "Manual",
+    "Nivel": "Medición",
+    "Plomada": "Medición",
+    "Flexometro": "Medición",
+    "Escuadra": "Medición",
+    "Pala": "Otro",
+    "Pico": "Otro",
+    "Azadon": "Otro",
+    "Carretilla": "Otro",
+    "Cubeta": "Otro",
+    "Andamio": "Otro",
+    "Escalera": "Otro"
+}
+
 # ============================================================================
 # APLICACIÓN FASTAPI Y CARGA DE MODELOS
 # ============================================================================
@@ -288,8 +328,12 @@ def get_market_price(
 
     try:
         tipo = inferir_tipo_herramienta(query)
+        sector_real = TIPO_TO_SECTOR.get(tipo, sector)
+        if not sector_real or sector_real.strip() in ["", "Categoría", "Otro"]:
+            sector_real = "Manual"
+
         input_df = pd.DataFrame([{
-            'sector_uso': sector,
+            'sector_uso': sector_real,
             'marca': marca,
             'tipo_herramienta': tipo,
             'score_condicion': 1.0  # Asumimos estado como nueva para precio de catálogo
@@ -330,8 +374,12 @@ def suggest_price(
 
     try:
         tipo = inferir_tipo_herramienta(nombre_herramienta)
+        sector_real = TIPO_TO_SECTOR.get(tipo, sector)
+        if not sector_real or sector_real.strip() in ["", "Categoría", "Otro"]:
+            sector_real = "Manual"
+
         input_df = pd.DataFrame([{
-            'sector_uso': sector,
+            'sector_uso': sector_real,
             'marca': marca,
             'tipo_herramienta': tipo,
             'score_condicion': score_condicion
@@ -400,8 +448,12 @@ def auto_valuate(
 
     try:
         tipo = inferir_tipo_herramienta(nombre_herramienta)
+        sector_real = TIPO_TO_SECTOR.get(tipo, sector)
+        if not sector_real or sector_real.strip() in ["", "Categoría", "Otro"]:
+            sector_real = "Manual"
+
         input_df = pd.DataFrame([{
-            'sector_uso': sector,
+            'sector_uso': sector_real,
             'marca': marca,
             'tipo_herramienta': tipo,
             'score_condicion': score_condicion
