@@ -14,69 +14,77 @@ csv_path = os.path.join(DATASET_DIR, "devaluacion_herramientas.csv")
 # Mapeado por las 8 categorías del frontend de Flutter
 REAL_PRODUCTS_CATALOG = [
     # --- ELÉCTRICO ---
-    {"sector_uso": "Eléctrico", "marca": "DeWalt", "tipo_herramienta": "Rotomartillo", "producto": "Taladro Rotomartillo Inalámbrico 20V XR", "precio_base_catalogo": 3499.0},
-    {"sector_uso": "Eléctrico", "marca": "Makita", "tipo_herramienta": "Taladro", "producto": "Taladro Percutor Inalámbrico 18V LXT", "precio_base_catalogo": 2999.0},
-    {"sector_uso": "Eléctrico", "marca": "Bosch", "tipo_herramienta": "Taladro", "producto": "Taladro Atornillador de Impacto 12V", "precio_base_catalogo": 1850.0},
+    {"sector_uso": "Eléctrico", "marca": "DeWalt", "tipo_herramienta": "Rotomartillo", "producto": "Rotomartillo Inalámbrico 20V Max", "precio_base_catalogo": 4500.0},
     {"sector_uso": "Eléctrico", "marca": "Bosch", "tipo_herramienta": "Rotomartillo", "producto": "Rotomartillo SDS Plus Professional", "precio_base_catalogo": 3990.0},
-    {"sector_uso": "Eléctrico", "marca": "Truper", "tipo_herramienta": "Rotomartillo", "producto": "Taladro Rotomartillo Alámbrico 1/2 650W", "precio_base_catalogo": 749.0},
-    {"sector_uso": "Eléctrico", "marca": "DeWalt", "tipo_herramienta": "Llave de Impacto", "producto": "Llave de Impacto de Alto Torque 20V", "precio_base_catalogo": 5299.0},
-    {"sector_uso": "Eléctrico", "marca": "Milwaukee", "tipo_herramienta": "Llave de Impacto", "producto": "Llave de Impacto M18 Fuel 1/2", "precio_base_catalogo": 6800.0},
-    {"sector_uso": "Eléctrico", "marca": "Truper", "tipo_herramienta": "Martillo Demoledor", "producto": "Martillo Demoledor Hexagonal 15kg", "precio_base_catalogo": 7900.0},
+    {"sector_uso": "Eléctrico", "marca": "Makita", "tipo_herramienta": "Taladro", "producto": "Taladro Percutor Inalámbrico 18V LXT", "precio_base_catalogo": 2999.0},
+    {"sector_uso": "Eléctrico", "marca": "DeWalt", "tipo_herramienta": "Taladro", "producto": "Taladro XR Brushless 20V", "precio_base_catalogo": 2499.0},
+    {"sector_uso": "Eléctrico", "marca": "Truper", "tipo_herramienta": "Taladro", "producto": "Taladro Rotomartillo Alámbrico 1/2 650W", "precio_base_catalogo": 749.0},
+    {"sector_uso": "Eléctrico", "marca": "Makita", "tipo_herramienta": "Esmeriladora", "producto": "Esmeriladora Angular 4-1/2 18V", "precio_base_catalogo": 2499.0},
+    {"sector_uso": "Eléctrico", "marca": "Truper", "tipo_herramienta": "Esmeriladora", "producto": "Esmeriladora Angular 4-1/2 850W", "precio_base_catalogo": 699.0},
+    {"sector_uso": "Eléctrico", "marca": "DeWalt", "tipo_herramienta": "Sierra", "producto": "Sierra Circular 7-1/4 20V Max", "precio_base_catalogo": 3199.0},
+    {"sector_uso": "Eléctrico", "marca": "Bosch", "tipo_herramienta": "Sierra", "producto": "Sierra Caladora 650W Heavy Duty", "precio_base_catalogo": 1999.0},
+    {"sector_uso": "Eléctrico", "marca": "Generico", "tipo_herramienta": "Mezcladora", "producto": "Mezcladora de Cemento Eléctrica 1/2 HP", "precio_base_catalogo": 8900.0},
+    {"sector_uso": "Eléctrico", "marca": "Makita", "tipo_herramienta": "Vibrador", "producto": "Vibrador de Concreto Portátil 18V LXT", "precio_base_catalogo": 5200.0},
 
     # --- CORTE ---
-    {"sector_uso": "Corte", "marca": "DeWalt", "tipo_herramienta": "Sierra", "producto": "Sierra Circular 7-1/4 20V Max", "precio_base_catalogo": 3199.0},
-    {"sector_uso": "Corte", "marca": "DeWalt", "tipo_herramienta": "Esmeriladora", "producto": "Esmeriladora Angular 4-1/2 20V", "precio_base_catalogo": 2899.0},
-    {"sector_uso": "Corte", "marca": "Makita", "tipo_herramienta": "Esmeriladora", "producto": "Esmeriladora Angular 4-1/2 18V LXT", "precio_base_catalogo": 2499.0},
-    {"sector_uso": "Corte", "marca": "Truper", "tipo_herramienta": "Esmeriladora", "producto": "Esmeriladora Angular 4-1/2 850W", "precio_base_catalogo": 699.0},
-    {"sector_uso": "Corte", "marca": "Bosch", "tipo_herramienta": "Sierra", "producto": "Sierra Caladora 650W Heavy Duty", "precio_base_catalogo": 1999.0},
-    {"sector_uso": "Corte", "marca": "Truper", "tipo_herramienta": "Sierra", "producto": "Sierra Caladora 550W Profesional", "precio_base_catalogo": 890.0},
-    {"sector_uso": "Corte", "marca": "DeWalt", "tipo_herramienta": "Cortadora", "producto": "Cortadora de Metales Sensitiva 14\"", "precio_base_catalogo": 4300.0},
-    {"sector_uso": "Corte", "marca": "Truper", "tipo_herramienta": "Cortadora", "producto": "Cortadora de Azulejo 4-1/2\"", "precio_base_catalogo": 1190.0},
+    {"sector_uso": "Corte", "marca": "Truper", "tipo_herramienta": "Segueta", "producto": "Arco para Segueta Profesional 12\"", "precio_base_catalogo": 185.0},
+    {"sector_uso": "Corte", "marca": "Stanley", "tipo_herramienta": "Serrucho", "producto": "Serrucho Profesional para Madera 20\"", "precio_base_catalogo": 240.0},
+    {"sector_uso": "Corte", "marca": "Truper", "tipo_herramienta": "Serrucho", "producto": "Serrucho de Costilla Mango Plástico 12\"", "precio_base_catalogo": 150.0},
+    {"sector_uso": "Corte", "marca": "Truper", "tipo_herramienta": "Cortadora", "producto": "Cortadora de Azulejo Profesional 60cm", "precio_base_catalogo": 1190.0},
+    {"sector_uso": "Corte", "marca": "Truper", "tipo_herramienta": "Cortadora", "producto": "Cortadora de Concreto Eléctrica Manual 12\"", "precio_base_catalogo": 6500.0},
 
     # --- ACABADO ---
     {"sector_uso": "Acabado", "marca": "Bosch", "tipo_herramienta": "Lijadora", "producto": "Lijadora Orbital de Palma Professional", "precio_base_catalogo": 1890.0},
     {"sector_uso": "Acabado", "marca": "Stanley", "tipo_herramienta": "Lijadora", "producto": "Lijadora Orbital de Palma 220W", "precio_base_catalogo": 850.0},
-    {"sector_uso": "Acabado", "marca": "Black & Decker", "tipo_herramienta": "Lijadora", "producto": "Lijadora de Detalle Mouse 1.2A", "precio_base_catalogo": 699.0},
-    {"sector_uso": "Acabado", "marca": "Makita", "tipo_herramienta": "Cepillo", "producto": "Cepillo Eléctrico 3-1/4 82mm", "precio_base_catalogo": 3100.0},
-    {"sector_uso": "Acabado", "marca": "Truper", "tipo_herramienta": "Cepillo", "producto": "Cepillo Eléctrico 3-1/4 Profesional", "precio_base_catalogo": 1490.0},
-    {"sector_uso": "Acabado", "marca": "Truper", "tipo_herramienta": "Pulidora", "producto": "Pulidora de Concreto Profesional 7\"", "precio_base_catalogo": 2390.0},
-    {"sector_uso": "Acabado", "marca": "Makita", "tipo_herramienta": "Vibrador", "producto": "Vibrador de Concreto 18V LXT", "precio_base_catalogo": 5200.0},
 
     # --- ENERGÍA ---
     {"sector_uso": "Energía", "marca": "Truper", "tipo_herramienta": "Generador", "producto": "Generador Eléctrico Portátil 800W", "precio_base_catalogo": 3990.0},
     {"sector_uso": "Energía", "marca": "Truper", "tipo_herramienta": "Soldadora", "producto": "Soldadora Inversa 130A Bivoltaje", "precio_base_catalogo": 2890.0},
-    {"sector_uso": "Energía", "marca": "Generico", "tipo_herramienta": "Soldadora", "producto": "Soldadora Inversora Ax Tech 200A", "precio_base_catalogo": 4200.0},
-    {"sector_uso": "Energía", "marca": "Truper", "tipo_herramienta": "Extension", "producto": "Extensión de Uso Rudo 15m Calibre 12", "precio_base_catalogo": 450.0},
 
     # --- NEUMÁTICO ---
     {"sector_uso": "Neumático", "marca": "Truper", "tipo_herramienta": "Compresor", "producto": "Compresor de Aire Lubricado 24L 2.5HP", "precio_base_catalogo": 2990.0},
     {"sector_uso": "Neumático", "marca": "Evans", "tipo_herramienta": "Compresor", "producto": "Compresor de Aire Eléctrico 50L 3HP", "precio_base_catalogo": 5800.0},
-    {"sector_uso": "Neumático", "marca": "Truper", "tipo_herramienta": "Clavadora", "producto": "Clavadora Neumática Calibre 18", "precio_base_catalogo": 1490.0},
-    {"sector_uso": "Neumático", "marca": "DeWalt", "tipo_herramienta": "Pistola de Impacto", "producto": "Pistola de Impacto Neumática 1/2\"", "precio_base_catalogo": 3100.0},
+    {"sector_uso": "Neumático", "marca": "Truper", "tipo_herramienta": "Clavadora", "producto": "Pistola de Clavillos Neumática Calibre 18", "precio_base_catalogo": 1490.0},
 
     # --- MANUAL ---
-    {"sector_uso": "Manual", "marca": "Craftsman", "tipo_herramienta": "Juego de Herramientas", "producto": "Juego de Herramientas Mecánicas 150pz", "precio_base_catalogo": 2890.0},
-    {"sector_uso": "Manual", "marca": "Stanley", "tipo_herramienta": "Juego de Herramientas", "producto": "Juego de Autocle Profesional 100pz", "precio_base_catalogo": 1890.0},
-    {"sector_uso": "Manual", "marca": "Truper", "tipo_herramienta": "Juego de Herramientas", "producto": "Juego de Llaves Combinadas 12 piezas", "precio_base_catalogo": 499.0},
-    {"sector_uso": "Manual", "marca": "Stanley", "tipo_herramienta": "Juego de Herramientas", "producto": "Juego de Destornilladores Cojín 10pz", "precio_base_catalogo": 350.0},
-    {"sector_uso": "Manual", "marca": "Truper", "tipo_herramienta": "Caja de Herramientas", "producto": "Caja de Herramientas de Plástico 20\"", "precio_base_catalogo": 390.0},
+    {"sector_uso": "Manual", "marca": "Truper", "tipo_herramienta": "Martillo", "producto": "Martillo de Uña Curva Mango de Fibra", "precio_base_catalogo": 190.0},
+    {"sector_uso": "Manual", "marca": "DeWalt", "tipo_herramienta": "Martillo", "producto": "Martillo de Uña Recta Antivibración 20oz", "precio_base_catalogo": 399.0},
+    {"sector_uso": "Manual", "marca": "Truper", "tipo_herramienta": "Mazo", "producto": "Mazo de Goma Blanca de 16 oz con Mango", "precio_base_catalogo": 120.0},
+    {"sector_uso": "Manual", "marca": "Truper", "tipo_herramienta": "Marro", "producto": "Marro Octogonal 4 lb con Mango de Madera", "precio_base_catalogo": 250.0},
+    {"sector_uso": "Manual", "marca": "Truper", "tipo_herramienta": "Cincel", "producto": "Cincel Cortafrío de Acero Cromo Vanadio 8\"", "precio_base_catalogo": 120.0},
+    {"sector_uso": "Manual", "marca": "Truper", "tipo_herramienta": "Llana", "producto": "Llana Dentada para Adhesivo de Azulejo", "precio_base_catalogo": 180.0},
+    {"sector_uso": "Manual", "marca": "Truper", "tipo_herramienta": "Espatula", "producto": "Espátula de Acero Inoxidable de 3\"", "precio_base_catalogo": 85.0},
+    {"sector_uso": "Manual", "marca": "Truper", "tipo_herramienta": "Cuchara", "producto": "Cuchara de Albañil Filadelfia 10\"", "precio_base_catalogo": 140.0},
+    {"sector_uso": "Manual", "marca": "Stanley", "tipo_herramienta": "Cuchara", "producto": "Paleta / Cuchara de Albañil Profesional", "precio_base_catalogo": 220.0},
+    {"sector_uso": "Manual", "marca": "Truper", "tipo_herramienta": "Destornillador", "producto": "Desarmador Plano Gabinete 1/4\" x 4\"", "precio_base_catalogo": 45.0},
+    {"sector_uso": "Manual", "marca": "Stanley", "tipo_herramienta": "Destornillador", "producto": "Juego de Desarmadores de Cruz y Plano 6pz", "precio_base_catalogo": 220.0},
+    {"sector_uso": "Manual", "marca": "Truper", "tipo_herramienta": "Llave", "producto": "Llave Inglesa Ajustable (Perica) 10\"", "precio_base_catalogo": 190.0},
     {"sector_uso": "Manual", "marca": "Truper", "tipo_herramienta": "Llave", "producto": "Llave Stilson de Hierro Maleable 14\"", "precio_base_catalogo": 290.0},
-    {"sector_uso": "Manual", "marca": "Truper", "tipo_herramienta": "Marro", "producto": "Marro Octogonal 4 lb con Mango", "precio_base_catalogo": 250.0},
+    {"sector_uso": "Manual", "marca": "Truper", "tipo_herramienta": "Pinza", "producto": "Alicates de Chofer / Pinza de Mecánico 8\"", "precio_base_catalogo": 130.0},
+    {"sector_uso": "Manual", "marca": "Stanley", "tipo_herramienta": "Pinza", "producto": "Tenazas / Pinza de Electricista Profesional", "precio_base_catalogo": 210.0},
+    {"sector_uso": "Manual", "marca": "DeWalt", "tipo_herramienta": "Pinza", "producto": "Pinza de Presion de Mordaza Curva 10\"", "precio_base_catalogo": 499.0},
+    {"sector_uso": "Manual", "marca": "Stanley", "tipo_herramienta": "Pinza", "producto": "Pinza de Presion de Mordaza Recta 10\"", "precio_base_catalogo": 349.0},
+    {"sector_uso": "Manual", "marca": "Truper", "tipo_herramienta": "Pinza", "producto": "Pinza de Presion Clasica 10\"", "precio_base_catalogo": 220.0},
+    {"sector_uso": "Manual", "marca": "Truper", "tipo_herramienta": "Pinza", "producto": "Pinza de Punta y Corte Inclinado 6\"", "precio_base_catalogo": 120.0},
+    {"sector_uso": "Manual", "marca": "Truper", "tipo_herramienta": "Pistola", "producto": "Pistola para Aplicar Silicón de Esqueleto", "precio_base_catalogo": 75.0},
+    {"sector_uso": "Manual", "marca": "Truper", "tipo_herramienta": "Cepillo", "producto": "Cepillo de Alambre Manual con Mango Plástico", "precio_base_catalogo": 45.0},
 
     # --- MEDICIÓN ---
-    {"sector_uso": "Medición", "marca": "Fluke", "tipo_herramienta": "Multimetro", "producto": "Multímetro Digital Fluke 115 TRMS", "precio_base_catalogo": 4900.0},
-    {"sector_uso": "Medición", "marca": "Truper", "tipo_herramienta": "Multimetro", "producto": "Multímetro Digital Escolar Profesional", "precio_base_catalogo": 450.0},
-    {"sector_uso": "Medición", "marca": "Bosch", "tipo_herramienta": "Nivel Laser", "producto": "Nivel Láser de Líneas Cruzadas 15m", "precio_base_catalogo": 2199.0},
-    {"sector_uso": "Medición", "marca": "Truper", "tipo_herramienta": "Nivel Laser", "producto": "Nivel Láser Autonivelante 10m", "precio_base_catalogo": 1250.0},
+    {"sector_uso": "Medición", "marca": "Truper", "tipo_herramienta": "Nivel", "producto": "Nivel de Burbuja Profesional de Aluminio 24\"", "precio_base_catalogo": 290.0},
+    {"sector_uso": "Medición", "marca": "Stanley", "tipo_herramienta": "Nivel", "producto": "Nivel de Burbuja Magnético de Resistencia", "precio_base_catalogo": 450.0},
+    {"sector_uso": "Medición", "marca": "Truper", "tipo_herramienta": "Plomada", "producto": "Plomada de Latón Macizo 16 oz con Hilo", "precio_base_catalogo": 160.0},
     {"sector_uso": "Medición", "marca": "Truper", "tipo_herramienta": "Flexometro", "producto": "Flexómetro Gripper con Seguro 5m", "precio_base_catalogo": 110.0},
-    {"sector_uso": "Medición", "marca": "Stanley", "tipo_herramienta": "Flexometro", "producto": "Flexómetro de Alta Resistencia 8m", "precio_base_catalogo": 260.0},
-    {"sector_uso": "Medición", "marca": "Bosch", "tipo_herramienta": "Distanciometro", "producto": "Distanciómetro Láser de Precisión 30m", "precio_base_catalogo": 1590.0},
+    {"sector_uso": "Medición", "marca": "Stanley", "tipo_herramienta": "Flexometro", "producto": "Flexómetro de Alta Resistencia (Cinta Métrica) 8m", "precio_base_catalogo": 260.0},
+    {"sector_uso": "Medición", "marca": "Truper", "tipo_herramienta": "Escuadra", "producto": "Escuadra de Combinación Graduada de 12\"", "precio_base_catalogo": 120.0},
 
     # --- OTRO ---
-    {"sector_uso": "Otro", "marca": "Generico", "tipo_herramienta": "Escalera", "producto": "Escalera de Extensión de Aluminio 24 peldaños", "precio_base_catalogo": 3890.0},
-    {"sector_uso": "Otro", "marca": "Truper", "tipo_herramienta": "Carretilla", "producto": "Carretilla Metálica Capacidad 80L", "precio_base_catalogo": 1290.0},
-    {"sector_uso": "Otro", "marca": "Truper", "tipo_herramienta": "Pala", "producto": "Pala Redonda Puño Plástico Y", "precio_base_catalogo": 290.0},
-    {"sector_uso": "Otro", "marca": "Truper", "tipo_herramienta": "Pico", "producto": "Pico de Excavación 5 lb con Mango", "precio_base_catalogo": 390.0}
+    {"sector_uso": "Otro", "marca": "Truper", "tipo_herramienta": "Pala", "producto": "Pala Redonda Mango Madera Puño Y", "precio_base_catalogo": 290.0},
+    {"sector_uso": "Otro", "marca": "Truper", "tipo_herramienta": "Pico", "producto": "Pico de Excavación 5 lb con Mango de Madera", "precio_base_catalogo": 390.0},
+    {"sector_uso": "Otro", "marca": "Truper", "tipo_herramienta": "Azadon", "producto": "Azadón de Forja con Mango de Madera 54\"", "precio_base_catalogo": 320.0},
+    {"sector_uso": "Otro", "marca": "Truper", "tipo_herramienta": "Carretilla", "producto": "Carretilla Metálica Capacidad 80L Llanta Neumática", "precio_base_catalogo": 1290.0},
+    {"sector_uso": "Otro", "marca": "Truper", "tipo_herramienta": "Cubeta", "producto": "Cubeta Reforzada de Plástico para Albañilería", "precio_base_catalogo": 85.0},
+    {"sector_uso": "Otro", "marca": "Generico", "tipo_herramienta": "Andamio", "producto": "Cuerpo de Andamio Estándar de Construcción", "precio_base_catalogo": 2400.0},
+    {"sector_uso": "Otro", "marca": "Generico", "tipo_herramienta": "Escalera", "producto": "Escalera de Extensión de Aluminio 24 peldaños", "precio_base_catalogo": 3890.0}
 ]
 
 # Coeficientes reales de retención de valor comercial según la marca 
