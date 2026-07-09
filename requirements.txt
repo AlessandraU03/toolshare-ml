@@ -9,3 +9,4 @@ uvicorn
 python-multipart
 requests
 pandas
+opencv-python
