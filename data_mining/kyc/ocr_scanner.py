@@ -7,7 +7,14 @@ from data_mining.kyc.face_detector import FaceDetector
 
 logger = logging.getLogger("toolshare-ml")
 
-INE_REGEX = re.compile(r"^[A-Z]{6}[0-9]{6}[HM][0-9]{5}[0-9]{2}$")
+# La clave de elector del INE mide 18 caracteres (no 20 como tenía este
+# regex antes de este fix). No fijamos la posición exacta de cada segmento
+# (letras del nombre / fecha / sexo / entidad-municipio): el OCR de una foto
+# de celular confunde con frecuencia letras y dígitos parecidos (O/0, S/5,
+# I/1, B/8, H/N) y no hay forma de re-tipear con certeza qué carácter iba en
+# cada posición exacta, así que solo validamos longitud y que sea alfanumérico.
+INE_LENGTH = 18
+INE_REGEX = re.compile(r"^[A-Z0-9]{18}$")
 
 def validar_clave_elector(clave: str) -> bool:
     if not clave:
@@ -31,10 +38,12 @@ def extraer_clave_elector_de_texto(texto: str) -> str:
             siguiente = lineas[i + 1] if i + 1 < len(lineas) else ""
             ventanas.append(linea + " " + siguiente)
 
-    # Si no encontramos la etiqueta (foto muy mala/angulada), como último
-    # recurso probamos con el documento completo.
+    # Si no encontramos ninguna línea con la etiqueta "ELECTOR", no hay nada
+    # confiable de dónde extraer: NO caemos a buscar en todo el documento
+    # (eso terminaba agarrando texto de encabezados como "CREDENCIAL PARA
+    # VOTAR" y aprobándolo como si fuera la clave real).
     if not ventanas:
-        ventanas.append(texto.upper())
+        return ""
 
     def _tras_etiqueta(ventana: str) -> str:
         """Recorta la propia etiqueta "...ELECTOR" para no incluirla como
@@ -44,14 +53,9 @@ def extraer_clave_elector_de_texto(texto: str) -> str:
         return limpio[idx + len("ELECTOR"):] if idx != -1 else limpio
 
     for ventana in ventanas:
-        exacto = re.findall(r"[A-Z]{6}[0-9]{6}[HM][0-9]{5}[0-9]{2}", _tras_etiqueta(ventana))
-        if exacto:
-            return exacto[0]
-
-    for ventana in ventanas:
-        flexibles = re.findall(r"[A-Z]{4,6}[A-Z0-9]{12,14}", _tras_etiqueta(ventana))
-        if flexibles:
-            return flexibles[0][:18]
+        candidatos = re.findall(r"[A-Z]{3,6}[A-Z0-9]{12,15}", _tras_etiqueta(ventana))
+        if candidatos:
+            return candidatos[0][:INE_LENGTH]
 
     return ""
 
