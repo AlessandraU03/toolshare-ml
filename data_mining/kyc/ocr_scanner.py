@@ -1,4 +1,3 @@
-import io
 import re
 import cv2
 import numpy as np
@@ -8,7 +7,7 @@ from data_mining.kyc.face_detector import FaceDetector
 
 logger = logging.getLogger("toolshare-ml")
 
-INE_REGEX = re.compile(r"^[A-Z]{6}[0-9]{6}[H|M][0-9]{5}[0-9]{2}$")
+INE_REGEX = re.compile(r"^[A-Z]{6}[0-9]{6}[HM][0-9]{5}[0-9]{2}$")
 
 def validar_clave_elector(clave: str) -> bool:
     if not clave:
@@ -16,19 +15,59 @@ def validar_clave_elector(clave: str) -> bool:
     return bool(INE_REGEX.match(clave.strip().upper()))
 
 def extraer_clave_elector_de_texto(texto: str) -> str:
+    """Busca la clave de elector cerca de la etiqueta "...ELECTOR" en el texto,
+    en vez de aplanar todo el documento y buscar cualquier racha de 18
+    caracteres — eso último terminaba agarrando texto de encabezados como
+    "INSTITUTO NACIONAL ELECTORAL" en vez de la clave real."""
     if not texto:
         return ""
-    texto_limpio = texto.upper().replace(" ", "").replace("\n", "")
-    
-    coincidencias = re.findall(r"[A-Z]{6}[0-9]{6}[H|M][0-9]{5}[0-9]{2}", texto_limpio)
-    if coincidencias:
-        return coincidencias[0]
-    
-    coincidencias_flexibles = re.findall(r"[A-Z0-9]{18}", texto_limpio)
-    for c in coincidencias_flexibles:
-        if re.match(r"^[A-Z]{4,6}", c):
-            return c
+
+    lineas = texto.upper().splitlines()
+    ventanas = []
+    for i, linea in enumerate(lineas):
+        # "ELECTOR" sin la "AL" que sigue: evita enganchar con el encabezado
+        # "INSTITUTO NACIONAL ELECTORAL", que también contiene "ELECTOR".
+        if re.search(r"ELECTOR(?!AL)", linea):
+            siguiente = lineas[i + 1] if i + 1 < len(lineas) else ""
+            ventanas.append(linea + " " + siguiente)
+
+    # Si no encontramos la etiqueta (foto muy mala/angulada), como último
+    # recurso probamos con el documento completo.
+    if not ventanas:
+        ventanas.append(texto.upper())
+
+    def _tras_etiqueta(ventana: str) -> str:
+        """Recorta la propia etiqueta "...ELECTOR" para no incluirla como
+        parte del código (ej. "DEELECTORULLPA..." -> "ULLPA...")."""
+        limpio = re.sub(r"[^A-Z0-9]", "", ventana)
+        idx = limpio.find("ELECTOR")
+        return limpio[idx + len("ELECTOR"):] if idx != -1 else limpio
+
+    for ventana in ventanas:
+        exacto = re.findall(r"[A-Z]{6}[0-9]{6}[HM][0-9]{5}[0-9]{2}", _tras_etiqueta(ventana))
+        if exacto:
+            return exacto[0]
+
+    for ventana in ventanas:
+        flexibles = re.findall(r"[A-Z]{4,6}[A-Z0-9]{12,14}", _tras_etiqueta(ventana))
+        if flexibles:
+            return flexibles[0][:18]
+
     return ""
+
+def _preprocesar_ine_para_ocr(ine_gray):
+    """Mejora la imagen antes de pasarla a Tesseract: la clave de elector se
+    imprime en letra muy pequeña, y una foto de celular sin procesar rara vez
+    tiene suficiente contraste/resolución para leerla de forma confiable."""
+    alto, ancho = ine_gray.shape[:2]
+    escala = 2 if max(alto, ancho) < 1600 else 1
+    if escala != 1:
+        ine_gray = cv2.resize(ine_gray, None, fx=escala, fy=escala, interpolation=cv2.INTER_CUBIC)
+    suavizada = cv2.bilateralFilter(ine_gray, 9, 75, 75)
+    binaria = cv2.adaptiveThreshold(
+        suavizada, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 11
+    )
+    return Image.fromarray(binaria)
 
 def procesar_kyc_biometrico(ine_bytes: bytes, selfie_bytes: bytes) -> dict:
     """Procesamiento de imagen local de Rostros y OCR de INE."""
@@ -93,7 +132,7 @@ def procesar_kyc_biometrico(ine_bytes: bytes, selfie_bytes: bytes) -> dict:
         }
 
     try:
-        pil_ine = Image.open(io.BytesIO(ine_bytes))
+        pil_ine = _preprocesar_ine_para_ocr(ine_gray)
         ocr_text = pytesseract.image_to_string(pil_ine)
         logger.info(f"KYC - Texto crudo del OCR ({len(ocr_text)} chars): {ocr_text!r}")
         clave_elector = extraer_clave_elector_de_texto(ocr_text)
