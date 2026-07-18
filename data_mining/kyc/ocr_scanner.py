@@ -95,7 +95,9 @@ def procesar_kyc_biometrico(ine_bytes: bytes, selfie_bytes: bytes) -> dict:
     try:
         pil_ine = Image.open(io.BytesIO(ine_bytes))
         ocr_text = pytesseract.image_to_string(pil_ine)
+        logger.info(f"KYC - Texto crudo del OCR ({len(ocr_text)} chars): {ocr_text!r}")
         clave_elector = extraer_clave_elector_de_texto(ocr_text)
+        logger.info(f"KYC - Candidato de clave de elector extraído: {clave_elector!r}")
         if clave_elector:
             ocr_utilizado = "pytesseract"
     except Exception as e:
@@ -106,6 +108,9 @@ def procesar_kyc_biometrico(ine_bytes: bytes, selfie_bytes: bytes) -> dict:
         }
 
     if not clave_elector or not validar_clave_elector(clave_elector):
+        logger.warning(
+            f"KYC - Clave de elector rechazada por formato: {clave_elector!r}"
+        )
         return {
             "valid": False,
             "error": "No se pudo extraer una clave de elector válida de la credencial. Sube una foto más nítida y bien iluminada."
