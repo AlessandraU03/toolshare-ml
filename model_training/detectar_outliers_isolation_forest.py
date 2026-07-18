@@ -10,7 +10,10 @@ import numpy as np
 from sklearn.ensemble import IsolationForest
 
 # Configuración de conexiones
-POSTGRES_DSN = "postgres://postgres:lagartija@localhost:5432/tool_inventory?sslmode=disable"
+POSTGRES_DSN = os.getenv(
+    "DATABASE_URL",
+    "postgres://postgres:lagartija@localhost:5432/tool_inventory?sslmode=disable"
+)
 MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", "modelo_isolation_forest.pkl")
 
 def run_outlier_detection():

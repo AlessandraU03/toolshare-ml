@@ -79,24 +79,31 @@ def procesar_kyc_biometrico(ine_bytes: bytes, selfie_bytes: bytes) -> dict:
 
     try:
         import pytesseract
+    except ImportError:
+        logger.warning("pytesseract no está disponible en este entorno.")
+        return {
+            "valid": False,
+            "error": "El servidor no puede leer el texto de la credencial en este momento. Intenta de nuevo más tarde."
+        }
+
+    try:
         pil_ine = Image.open(io.BytesIO(ine_bytes))
         ocr_text = pytesseract.image_to_string(pil_ine)
         clave_elector = extraer_clave_elector_de_texto(ocr_text)
         if clave_elector:
             ocr_utilizado = "pytesseract"
-    except Exception:
-        logger.warning("Pytesseract no disponible. Usando procesador OCR de contingencia.")
+    except Exception as e:
+        logger.warning(f"Fallo al leer la credencial con OCR: {e}")
+        return {
+            "valid": False,
+            "error": "No se pudo leer el texto de la credencial. Sube una foto más nítida."
+        }
 
-    if not clave_elector:
-        h, w, _ = ine_img.shape
-        if w > 150 and h > 150:
-            clave_elector = "PRRLSS85010212H700"
-            ocr_utilizado = "Contingencia (OpenCV Shape Analyzer)"
-        else:
-            return {
-                "valid": False,
-                "error": "El documento INE subido tiene baja resolución o no es legible."
-            }
+    if not clave_elector or not validar_clave_elector(clave_elector):
+        return {
+            "valid": False,
+            "error": "No se pudo extraer una clave de elector válida de la credencial. Sube una foto más nítida y bien iluminada."
+        }
 
     match_score = 0.91 if len(ine_faces) > 0 else 0.82
 

@@ -2,35 +2,49 @@ import os
 import pickle
 import psycopg2
 import logging
-import pandas as pd
 from typing import Optional
 from data_mining.nlp.preprocessor import inferir_tipo_herramienta, TIPO_TO_SECTOR
 
 logger = logging.getLogger("toolshare-ml")
 
-POSTGRES_DSN = "postgres://postgres:lagartija@localhost:5432/tool_inventory?sslmode=disable"
+POSTGRES_DSN = os.getenv(
+    "DATABASE_URL",
+    "postgres://postgres:lagartija@localhost:5432/tool_inventory?sslmode=disable"
+)
 MIN_TRANSACTIONS_THRESHOLD = 30
+FALLBACK_PRECIO_BASE = 1000.0
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MODELS_DIR = os.path.join(BASE_DIR, "models")
-MODEL_REGRESSION_PATH = os.path.join(MODELS_DIR, "modelo_devaluacion.pkl")
 
-# Carga perezosa del regresor
-regression_pipeline = None
 
-def get_regression_pipeline():
-    global regression_pipeline
-    if regression_pipeline is None:
-        if os.path.exists(MODEL_REGRESSION_PATH):
-            try:
-                with open(MODEL_REGRESSION_PATH, 'rb') as f:
-                    regression_pipeline = pickle.load(f)
-                logger.info(f"Modelo de Regresión Multi-salida cargado correctamente.")
-            except Exception as e:
-                logger.error(f"Error cargando regresor: {e}")
-        else:
-            logger.warning(f"No se encontró regresor en {MODEL_REGRESSION_PATH}")
-    return regression_pipeline
+def _obtener_precio_base(cursor, tipo: str, sector_real: str) -> dict:
+    """Cascada de fuentes de precio ordenada por confianza.
+
+    No hay ningún modelo entrenado prediciendo el precio: el catálogo semilla
+    se actualiza en la base de datos sin reentrenar nada, así que agregar una
+    herramienta nueva al catálogo escala sin tocar código ni modelos.
+    """
+    cursor.execute(
+        "SELECT valor_nuevo FROM catalogo_semilla WHERE category = %s",
+        (tipo,)
+    )
+    row = cursor.fetchone()
+    if row is not None:
+        return {"precio_base": float(row[0]), "fuente_precio": "catalogo_semilla_categoria"}
+
+    categorias_del_sector = [cat for cat, sec in TIPO_TO_SECTOR.items() if sec == sector_real]
+    if categorias_del_sector:
+        cursor.execute(
+            "SELECT AVG(valor_nuevo) FROM catalogo_semilla WHERE category = ANY(%s)",
+            (categorias_del_sector,)
+        )
+        row = cursor.fetchone()
+        if row is not None and row[0] is not None:
+            return {"precio_base": float(row[0]), "fuente_precio": "catalogo_semilla_sector"}
+
+    return {"precio_base": None, "fuente_precio": None}
+
 
 def calcular_pricing_motor(
     nombre_herramienta: str,
@@ -38,103 +52,97 @@ def calcular_pricing_motor(
     sector: str,
     marca: str,
     age_months: int = 12,
-    precio_base_manual: Optional[float] = None
+    precio_base_manual: Optional[float] = None,
+    ticket_validado: bool = False,
 ) -> dict:
-    """Motor central de cálculo de devaluación y tarifas de renta sugerida."""
+    """Motor central de cálculo de devaluación y tarifas de renta sugerida.
+
+    Orden de confianza del precio base (valor si fuera nuevo):
+      1. Ticket de compra validado por OCR (ticket_validado=True)
+      2. Catálogo semilla: categoría exacta
+      3. Catálogo semilla: promedio del sector de uso
+      4. Declaración libre del propietario sin comprobante (baja confianza,
+         se marca para revisión manual del administrador)
+      5. Valor mínimo de emergencia (sin ningún dato disponible)
+    """
     tipo = inferir_tipo_herramienta(nombre_herramienta)
     sector_real = TIPO_TO_SECTOR.get(tipo, sector)
     if not sector_real or sector_real.strip() in ["", "Categoría", "Otro"]:
         sector_real = "Manual"
 
     n_transacciones = 0
-    precio_base_semilla = None
-    valor_nuevo_semilla = None
-    
+    precio_base = None
+    fuente_precio = None
+    requiere_revision_manual = False
+
     try:
         conn = psycopg2.connect(POSTGRES_DSN)
         cursor = conn.cursor()
-        
-        cursor.execute("SELECT n_transacciones FROM v_conteo_transacciones_categoria WHERE category = %s", (tipo,))
+
+        cursor.execute(
+            "SELECT n_transacciones FROM v_conteo_transacciones_categoria WHERE category = %s",
+            (tipo,)
+        )
         row = cursor.fetchone()
         if row:
             n_transacciones = row[0]
-            
-        cursor.execute("SELECT precio_base, valor_nuevo FROM catalogo_semilla WHERE category = %s", (tipo,))
-        row_semilla = cursor.fetchone()
-        if row_semilla:
-            precio_base_semilla = float(row_semilla[0])
-            valor_nuevo_semilla = float(row_semilla[1])
-            
+
+        if ticket_validado and precio_base_manual is not None:
+            precio_base = precio_base_manual
+            fuente_precio = "ticket_validado"
+        else:
+            resultado_catalogo = _obtener_precio_base(cursor, tipo, sector_real)
+            precio_base = resultado_catalogo["precio_base"]
+            fuente_precio = resultado_catalogo["fuente_precio"]
+
         cursor.close()
         conn.close()
     except Exception as e:
         logger.error(f"Error al consultar base de datos Postgres: {e}")
 
-    modelo_utilizado = ""
-    precio_base = 0.0
-    valor_depreciado = 0.0
-    fuente_precio = ""
-    precio_renta_sugerido = 0.0
-
-    if precio_base_manual is not None:
-        precio_base = precio_base_manual
-        fuente_precio = "entrada_manual_usuario"
-    elif valor_nuevo_semilla is not None:
-        precio_base = valor_nuevo_semilla
-        fuente_precio = "catalogo_semilla"
-    else:
-        pipeline = get_regression_pipeline()
-        if pipeline is not None:
-            input_df = pd.DataFrame([{
-                'sector_uso': sector_real,
-                'marca': marca,
-                'tipo_herramienta': tipo,
-                'score_condicion': 1.0
-            }])
-            pred = pipeline.predict(input_df)[0]
-            precio_base = float(pred[0])
-            fuente_precio = "modelo_regresion_ml_propio"
+    if precio_base is None:
+        if precio_base_manual is not None:
+            precio_base = precio_base_manual
+            fuente_precio = "declaracion_usuario_sin_verificar"
+            requiere_revision_manual = True
         else:
-            precio_base = 1000.0  # Fallback estático
-            fuente_precio = "fallback_catalogo"
+            precio_base = FALLBACK_PRECIO_BASE
+            fuente_precio = "fallback_sin_datos"
+            requiere_revision_manual = True
 
     model_filename = f"random_forest_{tipo.lower().replace(' ', '_')}.pkl"
     model_path = os.path.join(MODELS_DIR, model_filename)
-    
+
+    deprec_factor = max(0.15, 1.0 - (age_months * 0.015))
+    valor_depreciado = precio_base * deprec_factor * score_condicion
+    precio_renta_sugerido = 0.0
+    modelo_utilizado = ""
+
     if n_transacciones >= MIN_TRANSACTIONS_THRESHOLD and os.path.exists(model_path):
         try:
+            import pandas as pd
             with open(model_path, 'rb') as f:
                 rf_model = pickle.load(f)
-            
+
             input_df = pd.DataFrame([{
                 'age_months': age_months,
                 'condition_score': score_condicion,
                 'estimated_value': precio_base
             }])
-            pred_rate = rf_model.predict(input_df)[0]
-            
-            deprec_factor = max(0.15, 1.0 - (age_months * 0.015))
-            valor_depreciado = precio_base * deprec_factor * score_condicion
-            precio_renta_sugerido = float(pred_rate)
-            
-            modelo_utilizado = f"Random Forest ({tipo})"
+            precio_renta_sugerido = float(rf_model.predict(input_df)[0])
+            modelo_utilizado = f"Random Forest ({tipo}, entrenado con {n_transacciones} rentas reales)"
         except Exception as e:
             logger.error(f"Error usando Random Forest específico: {e}")
-            n_transacciones = 0 
 
-    if n_transacciones < MIN_TRANSACTIONS_THRESHOLD or precio_renta_sugerido == 0.0:
-        # Fallback Heurístico de Minería de Datos
-        deprec_factor = max(0.15, 1.0 - (age_months * 0.015))
-        valor_depreciado = precio_base * deprec_factor * score_condicion
-        
+    if precio_renta_sugerido <= 0.0:
         tasa = 0.015
         if sector_real in ["Eléctrico", "Neumático", "Energía"]:
             tasa = 0.025
-            
         precio_renta_sugerido = valor_depreciado * tasa
-        modelo_utilizado = "Formula Heuristica Devaluacion"
+        modelo_utilizado = "Fórmula heurística de devaluación (categoría con menos de 30 rentas reales)"
 
     precio_renta_sugerido = max(10.0, min(2500.0, precio_renta_sugerido))
+    precio_renta_minimo = round(max(10.0, valor_depreciado * 0.5 / 30), 2)
 
     tope_garantia = round(precio_base, 2)
     deducible_sugerido = round(precio_base * 0.10, 2)
@@ -144,10 +152,12 @@ def calcular_pricing_motor(
         "sector_uso": sector_real,
         "marca": marca,
         "fuente_precio_catalogo": fuente_precio,
+        "requiere_revision_manual": requiere_revision_manual,
         "valor_nuevo_estimado": round(precio_base, 2),
         "valor_depreciado_estimado": round(valor_depreciado, 2),
         "precio_renta_sugerido": round(precio_renta_sugerido, 2),
+        "precio_renta_minimo": precio_renta_minimo,
         "deducible_garantia_sugerido": deducible_sugerido,
         "tope_cooperativo_garantia": tope_garantia,
-        "modelo_pricing_utilizado": modelo_utilizado
+        "modelo_pricing_utilizado": modelo_utilizado,
     }

@@ -10,7 +10,10 @@ import numpy as np
 from sklearn.cluster import KMeans
 
 # Configuración de conexiones
-POSTGRES_DSN = "postgres://postgres:lagartija@localhost:5432/tool_inventory?sslmode=disable"
+POSTGRES_DSN = os.getenv(
+    "DATABASE_URL",
+    "postgres://postgres:lagartija@localhost:5432/tool_inventory?sslmode=disable"
+)
 MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", "modelo_kmeans_semilla.pkl")
 
 # Catálogo semilla inicial de 15 herramientas de referencia en México

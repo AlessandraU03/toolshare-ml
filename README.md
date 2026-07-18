@@ -46,9 +46,21 @@ uvicorn api.main:app --reload --port 8000
 Si deseas reentrenar alguno de los modelos o realizar minería exploratoria, ejecuta el script respectiva desde el directorio raíz usando el entorno virtual:
 
 ```bash
-# Ejemplo: Entrenar el modelo de devaluación
-python model_training/entrenar_devaluacion.py
+# Ejemplo: sembrar el catálogo semilla y agrupar por gama con K-Means
+python model_training/entrenar_semilla_kmeans.py
 
-# Ejemplo: Limpiar el dataset de precios usando Isolation Forest
+# Ejemplo: filtrar outliers de rentas completadas antes de reentrenar
 python model_training/detectar_outliers_isolation_forest.py
+
+# Ejemplo: reentrenar el Random Forest de renta sugerida por categoría
+# (solo genera modelo para categorías con 30+ rentas reales limpias)
+python model_training/entrenar_random_forest.py
 ```
+
+> El precio base de una herramienta ya no se predice con un modelo entrenado
+> sobre un dataset fijo: sale de una cascada de fuentes reales (ticket de
+> compra validado por OCR → catálogo semilla por categoría → catálogo semilla
+> por sector → revisión manual), implementada en
+> `data_mining/valuation/pricing_engine.py`. Solo la tarifa de renta diaria
+> usa un modelo entrenado (Random Forest), y únicamente una vez que la
+> categoría acumula transacciones reales suficientes.

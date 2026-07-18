@@ -11,3 +11,4 @@ requests
 pandas
 opencv-python-headless
 psycopg2-binary
+pytesseract

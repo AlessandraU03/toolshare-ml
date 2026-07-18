@@ -10,7 +10,10 @@ import duckdb
 from datetime import datetime
 
 # Configuración de conexiones
-POSTGRES_DSN = "postgres://postgres:lagartija@localhost:5432/tool_inventory?sslmode=disable"
+POSTGRES_DSN = os.getenv(
+    "DATABASE_URL",
+    "postgres://postgres:lagartija@localhost:5432/tool_inventory?sslmode=disable"
+)
 DUCKDB_PATH = os.path.join(os.path.dirname(__file__), "toolshare_olap.duckdb")
 SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "schema.sql")
 

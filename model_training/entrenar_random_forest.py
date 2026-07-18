@@ -12,7 +12,10 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
 
 # Configuración de conexiones
-POSTGRES_DSN = "postgres://postgres:lagartija@localhost:5432/tool_inventory?sslmode=disable"
+POSTGRES_DSN = os.getenv(
+    "DATABASE_URL",
+    "postgres://postgres:lagartija@localhost:5432/tool_inventory?sslmode=disable"
+)
 MODELS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
 MIN_TRANSACTIONS_THRESHOLD = 30
 
