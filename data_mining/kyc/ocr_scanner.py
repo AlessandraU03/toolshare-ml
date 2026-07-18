@@ -52,11 +52,17 @@ def procesar_kyc_biometrico(ine_bytes: bytes, selfie_bytes: bytes) -> dict:
     ine_faces = []
 
     if face_cascade is not None:
+        # minNeighbors/minSize más altos que el default: con los valores previos
+        # (5/40px en selfie, 4/30px en INE) el Haar Cascade detectaba 2 rostros
+        # en una sola persona y hasta 7 "rostros" en el patrón de una credencial,
+        # bloqueando verificaciones válidas. Subir ambos parámetros suprime los
+        # falsos positivos por solapamiento/textura a costa de exigir una cara
+        # más nítida y grande en la imagen (razonable para una selfie/INE reales).
         selfie_faces = face_cascade.detectMultiScale(
-            selfie_gray, scaleFactor=1.1, minNeighbors=5, minSize=(40, 40)
+            selfie_gray, scaleFactor=1.1, minNeighbors=7, minSize=(60, 60)
         )
         ine_faces = face_cascade.detectMultiScale(
-            ine_gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30)
+            ine_gray, scaleFactor=1.1, minNeighbors=6, minSize=(50, 50)
         )
 
     logger.info(f"KYC - Rostros detectados en Selfie: {len(selfie_faces)}")
