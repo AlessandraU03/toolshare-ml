@@ -58,7 +58,12 @@ async def predict_condition(file: UploadFile = File(...)):
         contents = await file.read()
         image = Image.open(io.BytesIO(contents)).convert('RGB')
         image = image.resize((224, 224))
-        img_array = np.array(image) / 255.0
+        # El modelo incluye mobilenet_v3.preprocess_input dentro de su propio
+        # grafo (ver model_training/entrenar.py) y espera píxeles en su rango
+        # original 0-255; NO dividir entre 255 aquí, o el preprocesamiento
+        # interno del modelo recibe valores casi cero y las predicciones
+        # dejan de tener sentido.
+        img_array = np.array(image, dtype=np.float32)
         img_array = np.expand_dims(img_array, axis=0)
 
         predictions = model.predict(img_array)[0]

@@ -76,7 +76,12 @@ history = model.fit(
     class_weight=class_weight_dict
 )
 
+# "finetuned_final.keras" queda como respaldo con nombre descriptivo, pero el
+# nombre que realmente carga la API (api/routes_tool.py) es
+# "modelo_desgaste.keras" — se sobreescribe aquí porque el modelo afinado es
+# mejor que el baseline y debe ser el que quede desplegado.
 model.save(os.path.join(models_dir, "finetuned_final.keras"))
+model.save(os.path.join(models_dir, "modelo_desgaste.keras"))
 
 plt.figure(figsize=(12, 4))
 plt.subplot(1, 2, 1)
@@ -95,4 +100,4 @@ plt.tight_layout()
 plt.savefig(os.path.join(models_dir, "finetuned_history.png"))
 plt.show()
 
-print(f"Fine-tuning completo. Modelo guardado en {os.path.join(models_dir, 'finetuned_final.keras')}")
+print(f"Fine-tuning completo. Modelo guardado en {os.path.join(models_dir, 'finetuned_final.keras')} y modelo_desgaste.keras (deploy)")

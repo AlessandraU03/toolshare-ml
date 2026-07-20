@@ -1,7 +1,10 @@
 # scripts/entrenar.py
+import os
+import numpy as np
 import tensorflow as tf
 from tensorflow.keras.applications import MobileNetV3Small
 from tensorflow.keras import layers, models
+from sklearn.utils.class_weight import compute_class_weight
 import matplotlib.pyplot as plt
 
 IMG_SIZE = (224, 224)
@@ -67,6 +70,23 @@ model.compile(
 
 model.summary()
 
+# ---- Pesos de clase (compensa el desbalance entre nuevo/uso_moderado/viejo) ----
+y_list = []
+for idx, clase in enumerate(CLASES):
+    clase_path = os.path.join("dataset/train", clase)
+    if os.path.exists(clase_path):
+        num_files = len([f for f in os.listdir(clase_path) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
+        y_list.extend([idx] * num_files)
+
+y_train = np.array(y_list)
+class_weights = compute_class_weight(
+    class_weight="balanced",
+    classes=np.arange(len(CLASES)),
+    y=y_train
+)
+class_weight_dict = dict(enumerate(class_weights))
+print("Class weights:", class_weight_dict)
+
 # ---- Callbacks ----
 callbacks = [
     tf.keras.callbacks.EarlyStopping(patience=4, restore_best_weights=True),
@@ -82,11 +102,19 @@ history = model.fit(
     train_ds,
     validation_data=val_ds,
     epochs=EPOCHS,
-    callbacks=callbacks
+    callbacks=callbacks,
+    class_weight=class_weight_dict
 )
 
 # ---- Guardar modelo final ----
+# "baseline_final.keras" queda como respaldo con nombre descriptivo, pero el
+# nombre que realmente carga la API (api/routes_tool.py) es
+# "modelo_desgaste.keras" — se guarda también ahí para que el modelo quede
+# desplegado de inmediato sin un paso manual de renombrado. Si después corres
+# fine_tuning.py, ese script vuelve a sobreescribir "modelo_desgaste.keras"
+# con la versión afinada (mejor que esta).
 model.save("models/baseline_final.keras")
+model.save("models/modelo_desgaste.keras")
 
 # ---- Graficar resultados ----
 plt.figure(figsize=(12, 4))
@@ -109,4 +137,4 @@ plt.tight_layout()
 plt.savefig("models/baseline_history.png")
 plt.show()
 
-print("\nEntrenamiento completo. Modelo guardado en models/baseline_final.keras")
+print("\nEntrenamiento completo. Modelo guardado en models/baseline_final.keras y models/modelo_desgaste.keras (deploy)")
