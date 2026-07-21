@@ -66,8 +66,11 @@ def calcular_pricing_motor(
       5. Valor mínimo de emergencia (sin ningún dato disponible)
     """
     tipo = inferir_tipo_herramienta(nombre_herramienta)
+    # "Otro" es un sector real y valido (Pala, Pico, Carretilla, Escalera, etc.
+    # en TIPO_TO_SECTOR) — solo se cae a "Manual" cuando no hay sector en
+    # absoluto o llega el placeholder de UI "Categoría" sin resolver.
     sector_real = TIPO_TO_SECTOR.get(tipo, sector)
-    if not sector_real or sector_real.strip() in ["", "Categoría", "Otro"]:
+    if not sector_real or sector_real.strip() in ["", "Categoría"]:
         sector_real = "Manual"
 
     n_transacciones = 0
@@ -135,14 +138,24 @@ def calcular_pricing_motor(
             logger.error(f"Error usando Random Forest específico: {e}")
 
     if precio_renta_sugerido <= 0.0:
-        tasa = 0.015
+        # Tasa progresiva en base al valor estimado (precio_base)
+        if precio_base <= 250:
+            tasa = 0.12 # 12% para herramientas baratas
+        elif precio_base <= 1500:
+            tasa = 0.06 # 6% para herramientas de costo medio
+        else:
+            tasa = 0.045 # 4.5% para herramientas profesionales/caras
+            
         if sector_real in ["Eléctrico", "Neumático", "Energía"]:
-            tasa = 0.025
+            tasa += 0.015 # Sumar 1.5% extra para equipos motorizados
+            
         precio_renta_sugerido = valor_depreciado * tasa
         modelo_utilizado = "Fórmula heurística de devaluación (categoría con menos de 30 rentas reales)"
 
     precio_renta_sugerido = max(10.0, min(2500.0, precio_renta_sugerido))
-    precio_renta_minimo = round(max(10.0, valor_depreciado * 0.5 / 30), 2)
+    
+    # El precio mínimo permitido de renta debe ser el 50% de la sugerencia del día
+    precio_renta_minimo = round(max(10.0, precio_renta_sugerido * 0.50), 2)
 
     tope_garantia = round(precio_base, 2)
     deducible_sugerido = round(precio_base * 0.10, 2)

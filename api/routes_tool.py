@@ -58,11 +58,8 @@ async def predict_condition(file: UploadFile = File(...)):
         contents = await file.read()
         image = Image.open(io.BytesIO(contents)).convert('RGB')
         image = image.resize((224, 224))
-        # El modelo incluye mobilenet_v3.preprocess_input dentro de su propio
-        # grafo (ver model_training/entrenar.py) y espera píxeles en su rango
-        # original 0-255; NO dividir entre 255 aquí, o el preprocesamiento
-        # interno del modelo recibe valores casi cero y las predicciones
-        # dejan de tener sentido.
+        
+        # Preprocesamiento exacto esperado por MobileNetV3
         img_array = np.array(image, dtype=np.float32)
         img_array = np.expand_dims(img_array, axis=0)
 
@@ -71,12 +68,14 @@ async def predict_condition(file: UploadFile = File(...)):
         clase = CLASS_NAMES[max_idx]
 
         probs = {CLASS_NAMES[i]: float(predictions[i]) for i in range(len(CLASS_NAMES))}
+        logger.info(f"CNN Predict - Clase predicha por modelo visual: {clase} (confianza: {predictions[max_idx]:.4f})")
 
         return {
             "clase_predicha": CLASS_LABELS_DISPLAY[clase],
             "score_condicion": SCORE_MAPPING[clase],
             "probabilidades": probs
         }
+
     except Exception as e:
         logger.error(f"Error en predict-condition: {e}")
         raise HTTPException(

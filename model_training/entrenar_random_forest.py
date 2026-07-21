@@ -52,7 +52,7 @@ def run_random_forest_training():
             print(f"Categoría '{category}': {n_transacciones} transacciones registradas.")
             
             if n_transacciones < MIN_TRANSACTIONS_THRESHOLD:
-                print(f"  -> Insuficientes transacciones (mínimo {MIN_TRANSACTIONS_THRESHOLD}). Se continuará usando K-Means Semilla.")
+                print(f"  -> Insuficientes transacciones (mínimo {MIN_TRANSACTIONS_THRESHOLD}). Se continuará usando la fórmula heurística de devaluación en pricing_engine.py.")
                 continue
                 
             print(f"  -> ¡Umbral superado! Iniciando entrenamiento de Random Forest para '{category}'...")

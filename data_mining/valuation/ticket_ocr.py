@@ -12,8 +12,12 @@ logger = logging.getLogger("toolshare-ml")
 # cualquier corrida de dígitos sin coma ("1200.00"), muy común en tickets
 # mexicanos. Antes de este fix, un monto de 4+ dígitos sin coma (ej. 1200.00)
 # se truncaba a solo sus primeros 3 dígitos (120).
-MONTO_REGEX = re.compile(r"\$?\s?((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{2})?)")
-PALABRAS_TOTAL = ("total", "importe", "monto a pagar", "gran total")
+MONTO_REGEX = re.compile(r"(?:[\$\d\s]{1,3}(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{2})?)")
+PALABRAS_TOTAL = (
+    "total", "importe", "monto a pagar", "gran total", "neto", 
+    "subtotal", "cargo", "pagar", "pago", "venta", "efectivo",
+    "tarjeta", "cambio", "total mxn"
+)
 
 
 def _preprocesar_ticket_para_ocr(imagen: Image.Image) -> Image.Image:
@@ -33,26 +37,27 @@ def _preprocesar_ticket_para_ocr(imagen: Image.Image) -> Image.Image:
 
 
 def _texto_a_monto(texto: str) -> Optional[float]:
-    limpio = texto.replace(",", "")
+    # Limpiamos símbolos comunes que Tesseract confunde con dinero
+    limpio = re.sub(r"[^\d\.]", "", texto)
     try:
         valor = float(limpio)
     except ValueError:
         return None
-    if valor <= 0:
+    
+    # Ignorar números que parezcan años (2020-2030), códigos postales de 5 dígitos (e.g. 30500)
+    # o números excesivamente grandes o pequeños para una herramienta.
+    if 2018 <= valor <= 2035:
         return None
+    if 10000 <= valor <= 99999 and "." not in texto: # Códigos postales típicos
+        return None
+    if valor < 10 or valor > 150000: # Precios absurdos de herramientas
+        return None
+        
     return valor
 
 
 def extraer_precio_de_ticket(imagen_bytes: bytes) -> dict:
-    """Extrae el precio de compra declarado en un ticket/factura mediante OCR.
-
-    A diferencia del OCR de INE en kyc/ocr_scanner.py (que tiene un mecanismo
-    de contingencia porque solo valida un formato de texto), aquí no se
-    fabrica ningún precio si el OCR falla: un monto inventado afectaría
-    directamente el tope de la garantía cooperativa, así que ante duda se
-    reporta valid=False y se deja la decisión a las fuentes de precio del
-    catálogo semilla.
-    """
+    """Extrae el precio de compra declarado en un ticket/factura mediante OCR."""
     try:
         import pytesseract
     except ImportError:
@@ -75,14 +80,27 @@ def extraer_precio_de_ticket(imagen_bytes: bytes) -> dict:
         }
 
     montos_candidatos = []
-    for linea in texto_completo.splitlines():
+    lineas = texto_completo.splitlines()
+    
+    for i, linea in enumerate(lineas):
         linea_lower = linea.lower()
         if any(palabra in linea_lower for palabra in PALABRAS_TOTAL):
+            # 1. Buscamos montos en la misma línea
             for coincidencia in MONTO_REGEX.findall(linea):
                 monto = _texto_a_monto(coincidencia)
                 if monto is not None:
                     montos_candidatos.append((monto, "alta"))
+            
+            # 2. Si no hay monto en la misma línea, escaneamos la línea inmediata de abajo
+            # (Muy común en tickets de formato angosto donde el precio se imprime abajo de la etiqueta)
+            if i + 1 < len(lineas):
+                siguiente_linea = lineas[i + 1]
+                for coincidencia in MONTO_REGEX.findall(siguiente_linea):
+                    monto = _texto_a_monto(coincidencia)
+                    if monto is not None:
+                        montos_candidatos.append((monto, "alta"))
 
+    # Fallback general si no encontramos palabras clave de total
     if not montos_candidatos:
         for coincidencia in MONTO_REGEX.findall(texto_completo):
             monto = _texto_a_monto(coincidencia)
@@ -96,7 +114,8 @@ def extraer_precio_de_ticket(imagen_bytes: bytes) -> dict:
             "error": "No se detectó ningún monto legible en el ticket."
         }
 
-    montos_candidatos.sort(key=lambda item: item[0], reverse=True)
+    # Ordenamos priorizando candidatos de "alta" confianza, y luego por monto mayor lógico
+    montos_candidatos.sort(key=lambda item: (0 if item[1] == "alta" else 1, -item[0]))
     precio_detectado, confianza = montos_candidatos[0]
     logger.info(f"Ticket - Candidatos: {montos_candidatos}, elegido: {precio_detectado} ({confianza})")
 

@@ -33,10 +33,11 @@ val_ds = tf.keras.utils.image_dataset_from_directory(
 
 # ---- Augmentation ----
 data_augmentation = tf.keras.Sequential([
-    layers.RandomFlip("horizontal"),
-    layers.RandomRotation(0.1),
-    layers.RandomZoom(0.1),
-    layers.RandomContrast(0.1),
+    layers.RandomFlip("horizontal_and_vertical"),
+    layers.RandomRotation(0.2),
+    layers.RandomZoom(0.2),
+    layers.RandomContrast(0.2),
+    layers.RandomBrightness(0.2),
 ])
 
 # ---- Preprocesamiento (normalización MobileNetV3) ----
