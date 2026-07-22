@@ -1,12 +1,17 @@
 import os
 import io
 import logging
+# psycopg2 (via pricing_engine) se importa antes que tensorflow a proposito:
+# psycopg2-binary trae su propio OpenSSL empaquetado, y si tensorflow carga
+# primero el suyo, los simbolos chocan y psycopg2 truena con un segfault al
+# conectar (no un error normal de Python). Importar psycopg2 primero evita
+# el conflicto de version entre ambas copias de OpenSSL en el mismo proceso.
+from data_mining.valuation.pricing_engine import calcular_pricing_motor
+from data_mining.valuation.ticket_ocr import extraer_precio_de_ticket
 from PIL import Image
 import numpy as np
 import tensorflow as tf
 from fastapi import APIRouter, File, UploadFile, Query, HTTPException, status
-from data_mining.valuation.pricing_engine import calcular_pricing_motor
-from data_mining.valuation.ticket_ocr import extraer_precio_de_ticket
 
 logger = logging.getLogger("toolshare-ml")
 
