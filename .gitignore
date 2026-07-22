@@ -18,4 +18,5 @@ dataset_raw/
 
 # Forzar inclusión de modelos activos para despliegue
 !models/baseline_best.keras
+!models/modelo_desgaste.keras
 !models/buscador_nlp.pkl
