@@ -6,6 +6,9 @@ FROM python:3.13-slim
 # y ese necesita estas librerias graficas del sistema aunque nunca se abra
 # ninguna ventana -- sin ellas truena con "ImportError: libGL.so.1: cannot
 # open shared object file" al importar paddleocr.
+# libgomp1: runtime de OpenMP que necesita el nucleo compilado de
+# paddlepaddle (libpaddle.so) -- sin el truena con "ImportError:
+# libgomp.so.1: cannot open shared object file" al importar paddle.
 # (tesseract-ocr ya no hace falta: PaddleOCR reemplazo a pytesseract y es
 # puro Python + pesos de modelo, no necesita ningun binario de sistema).
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -14,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsm6 \
     libxext6 \
     libxrender1 \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
