@@ -24,6 +24,18 @@ class FaceDetector:
         return cls._face_cascade
 
 
+def precalentar_arcface():
+    """Carga el modelo ArcFace de una vez (llamar al iniciar el servidor, en
+    un hilo aparte) para que la primera verificación KYC real no pague ella
+    misma el costo de cargarlo."""
+    try:
+        from deepface import DeepFace
+        DeepFace.build_model("ArcFace")
+        logger.info("Modelo ArcFace precalentado.")
+    except Exception as e:
+        logger.error(f"No se pudo precalentar ArcFace: {e}")
+
+
 def verificar_identidad_facial(selfie_bgr, ine_bgr) -> dict:
     """Compara la selfie contra la foto del INE con un embedding facial real
     (ArcFace vía DeepFace) — antes de esto, match_facial_score era un valor

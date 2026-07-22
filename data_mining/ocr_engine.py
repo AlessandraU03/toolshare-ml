@@ -97,6 +97,20 @@ def _pedir_ocr(proc, ruta_imagen: str) -> str:
     return linea
 
 
+def precalentar():
+    """Arranca el worker de PaddleOCR de una vez (llamar al iniciar el
+    servidor, en un hilo aparte, para que la primera petición real de un
+    usuario ya lo encuentre caliente en vez de pagar el costo de arranque
+    ella misma)."""
+    global _proc
+    with _lock:
+        if _proc is None or _proc.poll() is not None:
+            try:
+                _proc = _start_worker()
+            except Exception as e:
+                logger.error(f"No se pudo precalentar el worker de OCR: {e}")
+
+
 def extraer_texto(imagen: Image.Image) -> str:
     """Corre OCR sobre una imagen PIL (vía el worker persistente) y devuelve
     el texto reconocido, una línea por renglón detectado (mismo formato que

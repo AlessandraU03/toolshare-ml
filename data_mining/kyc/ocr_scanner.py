@@ -2,6 +2,7 @@ import re
 import cv2
 import numpy as np
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from PIL import Image
 from data_mining.kyc.face_detector import FaceDetector, verificar_identidad_facial
 from data_mining.ocr_engine import extraer_texto
@@ -108,7 +109,7 @@ def extraer_clave_elector_de_texto(texto: str) -> str:
                 corregida = _corregir_errores_ocr(c[:18])
                 if validar_clave_elector(corregida):
                     return corregida
-                
+
     return ""
 
 def _preprocesar_ine_para_ocr(ine_bgr):
@@ -176,20 +177,39 @@ def procesar_kyc_biometrico(ine_bytes: bytes, selfie_bytes: bytes, curp: str = "
     ocr_utilizado = ""
     ocr_text = ""
 
-    try:
-        pil_ine = _preprocesar_ine_para_ocr(ine_img)
-        ocr_text = extraer_texto(pil_ine)
-        logger.info(f"KYC - Texto crudo del OCR ({len(ocr_text)} chars): {ocr_text!r}")
-        clave_elector = extraer_clave_elector_de_texto(ocr_text)
-        logger.info(f"KYC - Candidato de clave de elector extraído: {clave_elector!r}")
-        if clave_elector:
-            ocr_utilizado = "paddleocr"
-    except Exception as e:
-        logger.warning(f"Fallo al leer la credencial con OCR: {e}")
-        return {
-            "valid": False,
-            "error": "No se pudo leer el texto de la credencial. Sube una foto más nítida."
-        }
+    # El OCR de la credencial y la comparación facial (ArcFace) no dependen
+    # una de la otra -- antes corrían en fila (una tarda varios segundos por
+    # el arranque del worker de PaddleOCR, la otra por la carga/inferencia
+    # de ArcFace). Correrlas en paralelo corta a la mitad esa parte lenta
+    # en el caso feliz (las dos pasan). Si el OCR/clave termina rechazado
+    # más abajo, el resultado de la comparación facial simplemente se
+    # descarta -- un poco de cómputo de más a cambio de que el caso común
+    # (ambas pasan) sea rápido.
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futuro_ocr = executor.submit(lambda: extraer_texto(_preprocesar_ine_para_ocr(ine_img)))
+        futuro_facial = executor.submit(verificar_identidad_facial, selfie_img, ine_img)
+
+        try:
+            ocr_text = futuro_ocr.result()
+            logger.info(f"KYC - Texto crudo del OCR ({len(ocr_text)} chars): {ocr_text!r}")
+            clave_elector = extraer_clave_elector_de_texto(ocr_text)
+            logger.info(f"KYC - Candidato de clave de elector extraído: {clave_elector!r}")
+            if clave_elector:
+                ocr_utilizado = "paddleocr"
+        except Exception as e:
+            logger.warning(f"Fallo al leer la credencial con OCR: {e}")
+            # No se puede cancelar un hilo ya en ejecucion (Python no lo
+            # permite de forma segura) -- este caso de error espera a que la
+            # comparacion facial tambien termine antes de responder, aunque
+            # su resultado se descarte. Tradeoff aceptado a cambio de que el
+            # caso feliz (OCR y comparacion facial correctos) sea rapido.
+            futuro_facial.result()
+            return {
+                "valid": False,
+                "error": "No se pudo leer el texto de la credencial. Sube una foto más nítida."
+            }
+
+        verificacion = futuro_facial.result()
 
     # === VALIDACIÓN CRUZADA INTELIGENTE CON CURP ===
     kyc_aprobado = False
@@ -227,8 +247,7 @@ def procesar_kyc_biometrico(ine_bytes: bytes, selfie_bytes: bytes, curp: str = "
 
     # Comparación real de identidad (antes: un score fijo 0.91/0.82 que solo
     # dependía de si se detectaba ALGUNA cara en el INE, sin comparar nunca
-    # si era la misma persona de la selfie).
-    verificacion = verificar_identidad_facial(selfie_img, ine_img)
+    # si era la misma persona de la selfie) -- ya calculada en paralelo arriba.
     if not verificacion.get("verificado"):
         return {
             "valid": False,
