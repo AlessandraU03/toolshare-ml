@@ -10,5 +10,6 @@ python-multipart
 requests
 pandas
 opencv-python-headless
-psycopg2-binary
+psycopg2-binary; sys_platform == "win32"
+psycopg2; sys_platform != "win32"
 pytesseract
