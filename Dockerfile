@@ -1,10 +1,19 @@
 FROM python:3.13-slim
 
 # libglib2.0-0: dependencia de opencv-python-headless en tiempo de ejecucion.
+# libgl1/libsm6/libxext6/libxrender1: PaddleOCR/PaddleX traen opencv-python
+# completo (no el -headless que usamos nosotros) como dependencia transitiva,
+# y ese necesita estas librerias graficas del sistema aunque nunca se abra
+# ninguna ventana -- sin ellas truena con "ImportError: libGL.so.1: cannot
+# open shared object file" al importar paddleocr.
 # (tesseract-ocr ya no hace falta: PaddleOCR reemplazo a pytesseract y es
 # puro Python + pesos de modelo, no necesita ningun binario de sistema).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
+    libgl1 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
