@@ -2,9 +2,8 @@ import io
 import re
 import logging
 from typing import Optional
-import cv2
-import numpy as np
 from PIL import Image
+from data_mining.ocr_engine import extraer_texto
 
 logger = logging.getLogger("toolshare-ml")
 
@@ -21,19 +20,15 @@ PALABRAS_TOTAL = (
 
 
 def _preprocesar_ticket_para_ocr(imagen: Image.Image) -> Image.Image:
-    """Misma técnica usada para la credencial INE (kyc/ocr_scanner.py): un
-    ticket fotografiado con celular rara vez tiene suficiente contraste/
-    resolución para que Tesseract lea bien los montos sin ayuda."""
-    gris = cv2.cvtColor(np.array(imagen), cv2.COLOR_RGB2GRAY)
-    alto, ancho = gris.shape[:2]
-    escala = 2 if max(alto, ancho) < 1600 else 1
-    if escala != 1:
-        gris = cv2.resize(gris, None, fx=escala, fy=escala, interpolation=cv2.INTER_CUBIC)
-    suavizada = cv2.bilateralFilter(gris, 9, 75, 75)
-    binaria = cv2.adaptiveThreshold(
-        suavizada, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 11
-    )
-    return Image.fromarray(binaria)
+    """A diferencia de Tesseract, PaddleOCR ya está entrenado sobre fotos a
+    color reales y binarizar la imagen a mano (como se hacía antes) le quita
+    información en vez de ayudarle. Lo único que sigue valiendo la pena es
+    agrandar la imagen cuando el texto es muy chico."""
+    ancho, alto = imagen.size
+    if max(alto, ancho) < 1600:
+        factor = 2
+        imagen = imagen.resize((ancho * factor, alto * factor), Image.LANCZOS)
+    return imagen
 
 
 def _texto_a_monto(texto: str) -> Optional[float]:
@@ -59,18 +54,9 @@ def _texto_a_monto(texto: str) -> Optional[float]:
 def extraer_precio_de_ticket(imagen_bytes: bytes) -> dict:
     """Extrae el precio de compra declarado en un ticket/factura mediante OCR."""
     try:
-        import pytesseract
-    except ImportError:
-        logger.warning("pytesseract no está disponible en este entorno.")
-        return {
-            "valid": False,
-            "error": "El servicio de lectura de tickets no está disponible en este momento."
-        }
-
-    try:
         imagen = Image.open(io.BytesIO(imagen_bytes)).convert("RGB")
         imagen_procesada = _preprocesar_ticket_para_ocr(imagen)
-        texto_completo = pytesseract.image_to_string(imagen_procesada)
+        texto_completo = extraer_texto(imagen_procesada)
         logger.info(f"Ticket - Texto crudo del OCR ({len(texto_completo)} chars): {texto_completo!r}")
     except Exception as e:
         logger.error(f"Error al procesar el ticket con OCR: {e}")

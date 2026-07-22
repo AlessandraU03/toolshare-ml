@@ -3,7 +3,8 @@ import cv2
 import numpy as np
 import logging
 from PIL import Image
-from data_mining.kyc.face_detector import FaceDetector
+from data_mining.kyc.face_detector import FaceDetector, verificar_identidad_facial
+from data_mining.ocr_engine import extraer_texto
 
 logger = logging.getLogger("toolshare-ml")
 
@@ -110,19 +111,16 @@ def extraer_clave_elector_de_texto(texto: str) -> str:
                 
     return ""
 
-def _preprocesar_ine_para_ocr(ine_gray):
-    """Mejora la imagen antes de pasarla a Tesseract: la clave de elector se
-    imprime en letra muy pequeña, y una foto de celular sin procesar rara vez
-    tiene suficiente contraste/resolución para leerla de forma confiable."""
-    alto, ancho = ine_gray.shape[:2]
-    escala = 2 if max(alto, ancho) < 1600 else 1
-    if escala != 1:
-        ine_gray = cv2.resize(ine_gray, None, fx=escala, fy=escala, interpolation=cv2.INTER_CUBIC)
-    suavizada = cv2.bilateralFilter(ine_gray, 9, 75, 75)
-    binaria = cv2.adaptiveThreshold(
-        suavizada, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 11
-    )
-    return Image.fromarray(binaria)
+def _preprocesar_ine_para_ocr(ine_bgr):
+    """La clave de elector se imprime en letra muy pequeña. A diferencia de
+    Tesseract, PaddleOCR ya está entrenado sobre fotos a color reales —
+    binarizar a mano (como se hacía antes) le quita información en vez de
+    ayudarle. Lo único que sigue valiendo la pena es agrandar la imagen
+    cuando el texto es muy chico."""
+    alto, ancho = ine_bgr.shape[:2]
+    if max(alto, ancho) < 1600:
+        ine_bgr = cv2.resize(ine_bgr, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+    return Image.fromarray(cv2.cvtColor(ine_bgr, cv2.COLOR_BGR2RGB))
 
 def procesar_kyc_biometrico(ine_bytes: bytes, selfie_bytes: bytes, curp: str = "") -> dict:
     """Procesamiento de imagen local de Rostros y OCR de INE."""
@@ -179,22 +177,13 @@ def procesar_kyc_biometrico(ine_bytes: bytes, selfie_bytes: bytes, curp: str = "
     ocr_text = ""
 
     try:
-        import pytesseract
-    except ImportError:
-        logger.warning("pytesseract no está disponible en este entorno.")
-        return {
-            "valid": False,
-            "error": "El servidor no puede leer el texto de la credencial en este momento. Intenta de nuevo más tarde."
-        }
-
-    try:
-        pil_ine = _preprocesar_ine_para_ocr(ine_gray)
-        ocr_text = pytesseract.image_to_string(pil_ine)
+        pil_ine = _preprocesar_ine_para_ocr(ine_img)
+        ocr_text = extraer_texto(pil_ine)
         logger.info(f"KYC - Texto crudo del OCR ({len(ocr_text)} chars): {ocr_text!r}")
         clave_elector = extraer_clave_elector_de_texto(ocr_text)
         logger.info(f"KYC - Candidato de clave de elector extraído: {clave_elector!r}")
         if clave_elector:
-            ocr_utilizado = "pytesseract"
+            ocr_utilizado = "paddleocr"
     except Exception as e:
         logger.warning(f"Fallo al leer la credencial con OCR: {e}")
         return {
@@ -236,14 +225,25 @@ def procesar_kyc_biometrico(ine_bytes: bytes, selfie_bytes: bytes, curp: str = "
             "error": "No se pudo validar la credencial. Asegúrate de que los datos de tu registro coincidan con tu INE y sube una foto nítida."
         }
 
-    match_score = 0.91 if len(ine_faces) > 0 else 0.82
+    # Comparación real de identidad (antes: un score fijo 0.91/0.82 que solo
+    # dependía de si se detectaba ALGUNA cara en el INE, sin comparar nunca
+    # si era la misma persona de la selfie).
+    verificacion = verificar_identidad_facial(selfie_img, ine_img)
+    if not verificacion.get("verificado"):
+        return {
+            "valid": False,
+            "error": verificacion.get(
+                "error",
+                "La foto de la selfie no coincide con el rostro de la credencial."
+            )
+        }
 
     return {
         "valid": True,
         "rostros_selfie": len(selfie_faces),
         "rostros_ine": len(ine_faces) if len(ine_faces) > 0 else 1,
-        "ocr_motor": ocr_utilizado if ocr_utilizado else "pytesseract-crossval",
+        "ocr_motor": ocr_utilizado if ocr_utilizado else "paddleocr-crossval",
         "clave_elector_ine": clave_elector,
-        "match_facial_score": match_score,
+        "match_facial_score": round(max(0.0, 1 - (verificacion["distancia"] / verificacion["umbral"])), 4),
         "mensaje": "Validación KYC Biométrica Aprobada."
     }

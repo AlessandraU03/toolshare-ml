@@ -11,4 +11,7 @@ requests
 pandas
 opencv-python-headless
 psycopg2-binary
-pytesseract
+paddlepaddle==3.3.1
+paddleocr==3.7.0
+tf-keras==2.21.0
+deepface==0.0.100
