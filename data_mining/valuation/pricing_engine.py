@@ -18,15 +18,31 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 
 
-def _obtener_precio_base(cursor, tipo: str, sector_real: str) -> dict:
+def _obtener_precio_base(cursor, tipo: str, sector_real: str, marca: str = "") -> dict:
     """Cascada de fuentes de precio ordenada por confianza.
 
     No hay ningún modelo entrenado prediciendo el precio: el catálogo semilla
     se actualiza en la base de datos sin reentrenar nada, así que agregar una
     herramienta nueva al catálogo escala sin tocar código ni modelos.
+
+    marca=NULL en catalogo_semilla es el precio promedio de la categoría (la
+    fila que ya existía antes de agregar variación por marca); las filas con
+    marca son niveles específicos (ej. económica vs profesional) que evitan
+    que un Truper y un DeWalt del mismo tipo de herramienta salgan al mismo
+    precio cuando el usuario no sube ticket de compra.
     """
+    marca_norm = (marca or "").strip()
+    if marca_norm:
+        cursor.execute(
+            "SELECT valor_nuevo FROM catalogo_semilla WHERE category = %s AND marca ILIKE %s",
+            (tipo, marca_norm)
+        )
+        row = cursor.fetchone()
+        if row is not None:
+            return {"precio_base": float(row[0]), "fuente_precio": "catalogo_semilla_marca"}
+
     cursor.execute(
-        "SELECT valor_nuevo FROM catalogo_semilla WHERE category = %s",
+        "SELECT valor_nuevo FROM catalogo_semilla WHERE category = %s AND marca IS NULL",
         (tipo,)
     )
     row = cursor.fetchone()
@@ -36,7 +52,7 @@ def _obtener_precio_base(cursor, tipo: str, sector_real: str) -> dict:
     categorias_del_sector = [cat for cat, sec in TIPO_TO_SECTOR.items() if sec == sector_real]
     if categorias_del_sector:
         cursor.execute(
-            "SELECT AVG(valor_nuevo) FROM catalogo_semilla WHERE category = ANY(%s)",
+            "SELECT AVG(valor_nuevo) FROM catalogo_semilla WHERE category = ANY(%s) AND marca IS NULL",
             (categorias_del_sector,)
         )
         row = cursor.fetchone()
@@ -94,7 +110,7 @@ def calcular_pricing_motor(
             precio_base = precio_base_manual
             fuente_precio = "ticket_validado"
         else:
-            resultado_catalogo = _obtener_precio_base(cursor, tipo, sector_real)
+            resultado_catalogo = _obtener_precio_base(cursor, tipo, sector_real, marca)
             precio_base = resultado_catalogo["precio_base"]
             fuente_precio = resultado_catalogo["fuente_precio"]
 
