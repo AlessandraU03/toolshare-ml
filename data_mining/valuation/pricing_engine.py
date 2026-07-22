@@ -62,6 +62,23 @@ def _obtener_precio_base(cursor, tipo: str, sector_real: str, marca: str = "") -
     return {"precio_base": None, "fuente_precio": None}
 
 
+def _rango_plausible_categoria(cursor, tipo: str) -> Optional[tuple]:
+    """Rango de precio nuevo plausible para la categoría, a partir del spread
+    completo del catálogo semilla (económica..profesional). Márgenes 0.5x/1.5x
+    para no rechazar tickets legítimos de ofertas o tiendas caras. Devuelve
+    None si la categoría no tiene ninguna fila en el catálogo — en ese caso no
+    se puede acotar, así que no se rechaza nada (fail open).
+    """
+    cursor.execute(
+        "SELECT MIN(valor_nuevo), MAX(valor_nuevo) FROM catalogo_semilla WHERE category = %s",
+        (tipo,)
+    )
+    row = cursor.fetchone()
+    if row is None or row[0] is None:
+        return None
+    return (float(row[0]) * 0.5, float(row[1]) * 1.5)
+
+
 def calcular_pricing_motor(
     nombre_herramienta: str,
     score_condicion: float,
@@ -108,7 +125,22 @@ def calcular_pricing_motor(
 
         if ticket_validado and precio_base_manual is not None:
             precio_base = precio_base_manual
-            fuente_precio = "ticket_validado"
+            rango = _rango_plausible_categoria(cursor, tipo)
+            if rango is not None and not (rango[0] <= precio_base_manual <= rango[1]):
+                # El ticket no corresponde a un precio creible para este tipo
+                # de herramienta (ej. ticket de otra cosa subido para
+                # "validar" el precio). No lo descartamos ni lo reemplazamos
+                # — se respeta lo que subió el usuario — pero se le quita la
+                # etiqueta de "confiable al 100%".
+                fuente_precio = "ticket_fuera_de_rango"
+                requiere_revision_manual = True
+                logger.warning(
+                    f"Ticket fuera de rango plausible para '{tipo}': "
+                    f"${precio_base_manual:.2f} (rango esperado "
+                    f"${rango[0]:.2f}-${rango[1]:.2f})"
+                )
+            else:
+                fuente_precio = "ticket_validado"
         else:
             resultado_catalogo = _obtener_precio_base(cursor, tipo, sector_real, marca)
             precio_base = resultado_catalogo["precio_base"]
