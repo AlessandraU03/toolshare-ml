@@ -12,11 +12,30 @@ logger = logging.getLogger("toolshare-ml")
 # mexicanos. Antes de este fix, un monto de 4+ dígitos sin coma (ej. 1200.00)
 # se truncaba a solo sus primeros 3 dígitos (120).
 MONTO_REGEX = re.compile(r"(?:[\$\d\s]{1,3}(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{2})?)")
-PALABRAS_TOTAL = (
-    "total", "importe", "monto a pagar", "gran total", "neto", 
-    "subtotal", "cargo", "pagar", "pago", "venta", "efectivo",
-    "tarjeta", "cambio", "total mxn"
-)
+
+# Niveles de confianza por especificidad de la palabra clave. "total" es lo
+# mas confiable; "tarjeta"/"pago"/"importe" tambien aparecen pegados al
+# bloque de metadatos de pago con tarjeta (numero de cuenta, autorizacion,
+# afiliacion), que esta lleno de numeros grandes y por eso van al fondo.
+PALABRAS_ALTA = ("total", "gran total", "total mxn", "monto a pagar")
+PALABRAS_MEDIA = ("neto", "importe")
+PALABRAS_BAJA = ("cargo", "pagar", "pago", "venta", "efectivo", "tarjeta", "cambio")
+_ORDEN_CONFIANZA = {"alta": 0, "media": 1, "baja": 2, "fallback": 3}
+
+
+def _confianza_de_linea(linea_lower: str) -> Optional[str]:
+    # "subtotal" contiene la palabra "total" como substring, asi que se
+    # revisa aparte antes que la lista de alta confianza para no confundirse
+    # con el total real.
+    if "subtotal" in linea_lower:
+        return "media"
+    if any(p in linea_lower for p in PALABRAS_ALTA):
+        return "alta"
+    if any(p in linea_lower for p in PALABRAS_MEDIA):
+        return "media"
+    if any(p in linea_lower for p in PALABRAS_BAJA):
+        return "baja"
+    return None
 
 
 def _preprocesar_ticket_para_ocr(imagen: Image.Image) -> Image.Image:
@@ -65,33 +84,36 @@ def extraer_precio_de_ticket(imagen_bytes: bytes) -> dict:
             "error": "No se pudo leer la imagen del ticket. Verifica el formato o la resolución."
         }
 
-    montos_candidatos = []
+    montos_candidatos = []  # (monto, confianza, orden_de_aparicion)
     lineas = texto_completo.splitlines()
-    
+
     for i, linea in enumerate(lineas):
-        linea_lower = linea.lower()
-        if any(palabra in linea_lower for palabra in PALABRAS_TOTAL):
-            # 1. Buscamos montos en la misma línea
-            for coincidencia in MONTO_REGEX.findall(linea):
+        confianza = _confianza_de_linea(linea.lower())
+        if confianza is None:
+            continue
+
+        # 1. Buscamos montos en la misma línea
+        for coincidencia in MONTO_REGEX.findall(linea):
+            monto = _texto_a_monto(coincidencia)
+            if monto is not None:
+                montos_candidatos.append((monto, confianza, i))
+
+        # 2. Si no hay monto en la misma línea, escaneamos la línea inmediata de abajo
+        # (Muy común en tickets de formato angosto donde el precio se imprime abajo de la etiqueta)
+        if i + 1 < len(lineas):
+            siguiente_linea = lineas[i + 1]
+            for coincidencia in MONTO_REGEX.findall(siguiente_linea):
                 monto = _texto_a_monto(coincidencia)
                 if monto is not None:
-                    montos_candidatos.append((monto, "alta"))
-            
-            # 2. Si no hay monto en la misma línea, escaneamos la línea inmediata de abajo
-            # (Muy común en tickets de formato angosto donde el precio se imprime abajo de la etiqueta)
-            if i + 1 < len(lineas):
-                siguiente_linea = lineas[i + 1]
-                for coincidencia in MONTO_REGEX.findall(siguiente_linea):
-                    monto = _texto_a_monto(coincidencia)
-                    if monto is not None:
-                        montos_candidatos.append((monto, "alta"))
+                    montos_candidatos.append((monto, confianza, i))
 
     # Fallback general si no encontramos palabras clave de total
     if not montos_candidatos:
-        for coincidencia in MONTO_REGEX.findall(texto_completo):
-            monto = _texto_a_monto(coincidencia)
-            if monto is not None:
-                montos_candidatos.append((monto, "baja"))
+        for i, linea in enumerate(lineas):
+            for coincidencia in MONTO_REGEX.findall(linea):
+                monto = _texto_a_monto(coincidencia)
+                if monto is not None:
+                    montos_candidatos.append((monto, "fallback", i))
 
     if not montos_candidatos:
         logger.warning("Ticket - No se encontró ningún monto candidato en el texto del OCR.")
@@ -100,9 +122,14 @@ def extraer_precio_de_ticket(imagen_bytes: bytes) -> dict:
             "error": "No se detectó ningún monto legible en el ticket."
         }
 
-    # Ordenamos priorizando candidatos de "alta" confianza, y luego por monto mayor lógico
-    montos_candidatos.sort(key=lambda item: (0 if item[1] == "alta" else 1, -item[0]))
-    precio_detectado, confianza = montos_candidatos[0]
+    # Priorizamos la palabra clave mas especifica (TOTAL > SUBTOTAL/IMPORTE >
+    # TARJETA/PAGO/CAMBIO) y, dentro del mismo nivel, el PRIMER monto que
+    # aparece en el ticket -- no el mas grande. El total real siempre
+    # aparece antes del bloque de metadatos de la tarjeta (numero de cuenta,
+    # autorizacion, afiliacion), que esta lleno de numeros grandes que antes
+    # ganaban solo por ser "el mayor".
+    montos_candidatos.sort(key=lambda item: (_ORDEN_CONFIANZA[item[1]], item[2]))
+    precio_detectado, confianza, _ = montos_candidatos[0]
     logger.info(f"Ticket - Candidatos: {montos_candidatos}, elegido: {precio_detectado} ({confianza})")
 
     return {
