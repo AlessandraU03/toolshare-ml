@@ -254,6 +254,9 @@ def procesar_kyc_biometrico(ine_bytes: bytes, selfie_bytes: bytes, curp: str = "
     # dependía de si se detectaba ALGUNA cara en el INE, sin comparar nunca
     # si era la misma persona de la selfie) -- ya calculada en paralelo arriba.
     if not verificacion.get("verificado"):
+        logger.warning(
+            f"KYC - Comparación facial rechazada: {verificacion!r}"
+        )
         return {
             "valid": False,
             "error": verificacion.get(
