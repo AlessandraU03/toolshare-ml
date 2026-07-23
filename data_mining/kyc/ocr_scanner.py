@@ -9,16 +9,20 @@ from data_mining.ocr_engine import extraer_texto
 
 logger = logging.getLogger("toolshare-ml")
 
-# La clave de elector del INE mide 18 caracteres (no 20 como tenía este
-# regex antes de este fix). No fijamos la posición exacta de cada segmento
-# (letras del nombre / fecha / sexo / entidad-municipio): el OCR de una foto
-# de celular confunde con frecuencia letras y dígitos parecidos (O/0, S/5,
-# I/1, B/8, H/N) y no hay forma de re-tipear con certeza qué carácter iba en
-# cada posición exacta, así que solo validamos longitud y que sea alfanumérico.
+# Formato oficial de la clave de elector del INE (confirmado contra la
+# fuente oficial, el regex anterior tenía la estructura mal desde antes de
+# este fix -- eso, no el OCR, es lo que rechazaba credenciales reales):
+#   posiciones 1-6:   2 consonantes de c/u de los 2 apellidos + nombre (6 letras)
+#   posiciones 7-12:  fecha de nacimiento AAMMDD (6 dígitos)
+#   posiciones 13-14: entidad federativa de nacimiento (2 dígitos)
+#   posición 15:      sexo, H o M
+#   posiciones 16-18: homoclave aleatoria (3 dígitos)
+# Ej. LYCSMB79091709M200 (INEtelMX). Antes se asumía el sexo justo después
+# de la fecha (sin los 2 dígitos de entidad en medio) y homoclave de 3+2 —
+# por eso claves reales como VCRNCR05080907H300 se rechazaban: los "07" ahí
+# son la entidad (Chiapas), no ruido del OCR.
 INE_LENGTH = 18
-# Regex estricto del formato oficial del INE mexicano:
-# 6 letras (apellidos y nombre) + 6 números (AAMMDD) + 1 letra (H/M) + 3 números + 2 alfanuméricos
-INE_REGEX = re.compile(r"^[A-Z]{6}[0-9]{6}[HM][0-9]{3}[A-Z0-9]{2}$")
+INE_REGEX = re.compile(r"^[A-Z]{6}[0-9]{8}[HM][0-9]{3}$")
 
 def validar_clave_elector(clave: str) -> bool:
     if not clave:
@@ -70,28 +74,29 @@ def extraer_clave_elector_de_texto(texto: str) -> str:
         # Números por Letras (para las primeras 6 letras)
         to_char = {'0': 'O', '5': 'S', '1': 'I', '8': 'B', '2': 'Z', '6': 'G', '7': 'T'}
         
-        # 1. Primeras 6 posiciones deben ser letras
+        # 1. Posiciones 0-5 (índices): letras (apellidos y nombre)
         for i in range(6):
             if chars[i].isdigit() and chars[i] in to_char:
                 chars[i] = to_char[chars[i]]
-                
-        # 2. Posiciones 6 a 11 (índices 6 a 11) deben ser números (fecha de nacimiento)
-        for i in range(6, 12):
+
+        # 2. Posiciones 6-13 (índices): números (6 de fecha de nacimiento
+        # AAMMDD + 2 de entidad federativa de nacimiento)
+        for i in range(6, 14):
             if chars[i].isalpha() and chars[i] in to_num:
                 chars[i] = to_num[chars[i]]
-                
-        # 3. Posición 12 (índice 12) debe ser H o M
-        if chars[12] not in ['H', 'M']:
-            if chars[12] == 'N' or chars[12] == '1':
-                chars[12] = 'H' # Asumimos H o M por similitud de trazo
-            elif chars[12] == '0' or chars[12] == 'O':
-                chars[12] = 'M'
-                
-        # 4. Posiciones 13 a 15 (índices 13 a 15) deben ser números (entidad/municipio/homoclave)
-        for i in range(13, 16):
+
+        # 3. Posición 14 (índice): debe ser H o M (sexo)
+        if chars[14] not in ['H', 'M']:
+            if chars[14] == 'N' or chars[14] == '1':
+                chars[14] = 'H' # Asumimos H o M por similitud de trazo
+            elif chars[14] == '0' or chars[14] == 'O':
+                chars[14] = 'M'
+
+        # 4. Posiciones 15-17 (índices): números (homoclave aleatoria)
+        for i in range(15, 18):
             if chars[i].isalpha() and chars[i] in to_num:
                 chars[i] = to_num[chars[i]]
-                
+
         return "".join(chars)
 
     for ventana in ventanas:
