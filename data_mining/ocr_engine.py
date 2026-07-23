@@ -111,11 +111,13 @@ def precalentar():
                 logger.error(f"No se pudo precalentar el worker de OCR: {e}")
 
 
-def extraer_texto(imagen: Image.Image) -> str:
+def _ejecutar_ocr(imagen: Image.Image) -> dict:
     """Corre OCR sobre una imagen PIL (vía el worker persistente) y devuelve
-    el texto reconocido, una línea por renglón detectado (mismo formato que
-    antes producía pytesseract.image_to_string, para no tener que tocar la
-    lógica de extracción de montos/clave de elector que ya existe)."""
+    el dict crudo {"textos": [...], "scores": [...]} -- scores es la
+    confianza de reconocimiento de PaddleOCR por línea (0-1), útil para
+    detectar texto sospechoso (p. ej. un monto tachado y reescrito a mano
+    sobre un ticket impreso, que el modelo reconoce con mucha menos
+    confianza que el texto impreso original)."""
     global _proc
 
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
@@ -136,18 +138,37 @@ def extraer_texto(imagen: Image.Image) -> str:
 
         if not linea:
             logger.error("El worker de OCR no devolvió respuesta.")
-            return ""
+            return {"textos": [], "scores": []}
 
         resultado = json.loads(linea)
         if not resultado.get("ok"):
             logger.error(f"OCR worker reportó error: {resultado.get('error')}")
-            return ""
-        return "\n".join(resultado.get("textos", []))
+            return {"textos": [], "scores": []}
+        return {
+            "textos": resultado.get("textos", []),
+            "scores": resultado.get("scores", []),
+        }
     except Exception as e:
         logger.error(f"Error al ejecutar OCR: {e}")
-        return ""
+        return {"textos": [], "scores": []}
     finally:
         try:
             os.remove(tmp_path)
         except OSError:
             pass
+
+
+def extraer_texto(imagen: Image.Image) -> str:
+    """Corre OCR sobre una imagen PIL y devuelve el texto reconocido, una
+    línea por renglón detectado (mismo formato que antes producía
+    pytesseract.image_to_string, para no tener que tocar la lógica de
+    extracción de clave de elector que ya existe)."""
+    return "\n".join(_ejecutar_ocr(imagen)["textos"])
+
+
+def extraer_texto_con_confianza(imagen: Image.Image) -> list[tuple[str, float]]:
+    """Igual que extraer_texto, pero conserva la confianza de reconocimiento
+    de cada línea (usado por ticket_ocr.py para desconfiar de montos
+    alterados a mano)."""
+    datos = _ejecutar_ocr(imagen)
+    return list(zip(datos["textos"], datos["scores"]))

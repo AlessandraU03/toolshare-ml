@@ -13,7 +13,7 @@ devolviendo el resultado como una linea de JSON en stdout.
 
 Protocolo (una linea = una peticion/respuesta):
   stdin  <- ruta_absoluta_de_imagen
-  stdout -> {"ok": true, "textos": [...]}  o  {"ok": false, "error": "..."}
+  stdout -> {"ok": true, "textos": [...], "scores": [...]}  o  {"ok": false, "error": "..."}
 """
 import sys
 import json
@@ -47,7 +47,8 @@ def main():
             imagen = Image.open(ruta_imagen).convert("RGB")
             resultados = ocr.predict(np.array(imagen))
             textos = resultados[0].get("rec_texts", []) if resultados else []
-            print(json.dumps({"ok": True, "textos": textos}), flush=True)
+            scores = resultados[0].get("rec_scores", []) if resultados else []
+            print(json.dumps({"ok": True, "textos": textos, "scores": scores}), flush=True)
         except Exception as e:
             print(json.dumps({"ok": False, "error": str(e)}), flush=True)
 

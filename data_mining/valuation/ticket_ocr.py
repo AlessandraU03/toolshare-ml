@@ -3,7 +3,7 @@ import re
 import logging
 from typing import Optional
 from PIL import Image
-from data_mining.ocr_engine import extraer_texto
+from data_mining.ocr_engine import extraer_texto_con_confianza
 
 logger = logging.getLogger("toolshare-ml")
 
@@ -21,6 +21,15 @@ PALABRAS_ALTA = ("total", "gran total", "total mxn", "monto a pagar")
 PALABRAS_MEDIA = ("neto", "importe")
 PALABRAS_BAJA = ("cargo", "pagar", "pago", "venta", "efectivo", "tarjeta", "cambio")
 _ORDEN_CONFIANZA = {"alta": 0, "media": 1, "baja": 2, "fallback": 3}
+
+# PaddleOCR devuelve, por cada línea detectada, qué tan seguro está el
+# modelo de haber leído bien ese texto. Texto impreso limpio de un ticket
+# térmico normalmente da >0.9. Un monto tachado y reescrito a mano (u otra
+# alteración física) el modelo lo reconoce con mucha menos confianza porque
+# nunca fue entrenado para leer letra manuscrita como si fuera texto
+# impreso -- por debajo de este umbral no confiamos en el monto ganador y
+# lo tratamos como si no se hubiera encontrado un total válido.
+UMBRAL_OCR_SOSPECHOSO = 0.80
 
 
 def _confianza_de_linea(linea_lower: str) -> Optional[str]:
@@ -75,7 +84,10 @@ def extraer_precio_de_ticket(imagen_bytes: bytes) -> dict:
     try:
         imagen = Image.open(io.BytesIO(imagen_bytes)).convert("RGB")
         imagen_procesada = _preprocesar_ticket_para_ocr(imagen)
-        texto_completo = extraer_texto(imagen_procesada)
+        pares = extraer_texto_con_confianza(imagen_procesada)
+        lineas = [texto for texto, _ in pares]
+        scores = [score for _, score in pares]
+        texto_completo = "\n".join(lineas)
         logger.info(f"Ticket - Texto crudo del OCR ({len(texto_completo)} chars): {texto_completo!r}")
     except Exception as e:
         logger.error(f"Error al procesar el ticket con OCR: {e}")
@@ -84,8 +96,7 @@ def extraer_precio_de_ticket(imagen_bytes: bytes) -> dict:
             "error": "No se pudo leer la imagen del ticket. Verifica el formato o la resolución."
         }
 
-    montos_candidatos = []  # (monto, confianza, orden_de_aparicion)
-    lineas = texto_completo.splitlines()
+    montos_candidatos = []  # (monto, confianza, orden_de_aparicion, score_ocr)
 
     for i, linea in enumerate(lineas):
         confianza = _confianza_de_linea(linea.lower())
@@ -96,16 +107,15 @@ def extraer_precio_de_ticket(imagen_bytes: bytes) -> dict:
         for coincidencia in MONTO_REGEX.findall(linea):
             monto = _texto_a_monto(coincidencia)
             if monto is not None:
-                montos_candidatos.append((monto, confianza, i))
+                montos_candidatos.append((monto, confianza, i, scores[i]))
 
         # 2. Si no hay monto en la misma línea, escaneamos la línea inmediata de abajo
         # (Muy común en tickets de formato angosto donde el precio se imprime abajo de la etiqueta)
         if i + 1 < len(lineas):
-            siguiente_linea = lineas[i + 1]
-            for coincidencia in MONTO_REGEX.findall(siguiente_linea):
+            for coincidencia in MONTO_REGEX.findall(lineas[i + 1]):
                 monto = _texto_a_monto(coincidencia)
                 if monto is not None:
-                    montos_candidatos.append((monto, confianza, i))
+                    montos_candidatos.append((monto, confianza, i, scores[i + 1]))
 
     # Fallback general si no encontramos palabras clave de total
     if not montos_candidatos:
@@ -113,7 +123,7 @@ def extraer_precio_de_ticket(imagen_bytes: bytes) -> dict:
             for coincidencia in MONTO_REGEX.findall(linea):
                 monto = _texto_a_monto(coincidencia)
                 if monto is not None:
-                    montos_candidatos.append((monto, "fallback", i))
+                    montos_candidatos.append((monto, "fallback", i, scores[i]))
 
     if not montos_candidatos:
         logger.warning("Ticket - No se encontró ningún monto candidato en el texto del OCR.")
@@ -129,8 +139,20 @@ def extraer_precio_de_ticket(imagen_bytes: bytes) -> dict:
     # autorizacion, afiliacion), que esta lleno de numeros grandes que antes
     # ganaban solo por ser "el mayor".
     montos_candidatos.sort(key=lambda item: (_ORDEN_CONFIANZA[item[1]], item[2]))
-    precio_detectado, confianza, _ = montos_candidatos[0]
-    logger.info(f"Ticket - Candidatos: {montos_candidatos}, elegido: {precio_detectado} ({confianza})")
+    precio_detectado, confianza, _, score_ocr = montos_candidatos[0]
+    logger.info(f"Ticket - Candidatos: {montos_candidatos}, elegido: {precio_detectado} ({confianza}, score={score_ocr:.3f})")
+
+    if score_ocr < UMBRAL_OCR_SOSPECHOSO:
+        logger.warning(
+            f"Ticket - Monto {precio_detectado} descartado por baja confianza de OCR "
+            f"({score_ocr:.3f} < {UMBRAL_OCR_SOSPECHOSO}), posible alteración física del ticket."
+        )
+        return {
+            "valid": False,
+            "error": "El monto del ticket no se pudo leer con suficiente claridad "
+                     "(puede estar tachado, sobrescrito o dañado). Se usará el catálogo de "
+                     "referencia y tu herramienta quedará marcada para revisión manual.",
+        }
 
     return {
         "valid": True,
