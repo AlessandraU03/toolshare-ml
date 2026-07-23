@@ -24,8 +24,14 @@ def main():
     import numpy as np
     from PIL import Image
 
+    # Modelos "small" en vez del "medium" por defecto: mucho mas rapidos en
+    # CPU (la unica opcion en Railway, sin GPU), con una perdida de precision
+    # aceptable para texto impreso claro como un ticket de compra. Los
+    # nombres de modelo ya son multilingues (46 idiomas latinos incluido
+    # espanol), por lo que reemplazan a "lang" en vez de combinarse con el.
     ocr = PaddleOCR(
-        lang="es",
+        text_detection_model_name="PP-OCRv6_small_det",
+        text_recognition_model_name="PP-OCRv6_small_rec",
         use_doc_orientation_classify=False,
         use_doc_unwarping=False,
         use_textline_orientation=False,

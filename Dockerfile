@@ -29,7 +29,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # request: en produccion la primera llamada tardaba 2+ minutos bajando
 # los modelos (visto localmente), lo que se hubiera visto como un timeout
 # o un servicio "colgado" en Railway.
-RUN python -c "from paddleocr import PaddleOCR; PaddleOCR(lang='es', use_doc_orientation_classify=False, use_doc_unwarping=False, use_textline_orientation=False, enable_mkldnn=False)"
+RUN python -c "from paddleocr import PaddleOCR; PaddleOCR(text_detection_model_name='PP-OCRv6_small_det', text_recognition_model_name='PP-OCRv6_small_rec', use_doc_orientation_classify=False, use_doc_unwarping=False, use_textline_orientation=False, enable_mkldnn=False)"
 
 # Mismo motivo: los pesos de ArcFace (verificacion facial KYC) pesan ~137MB
 # y se descargan de github.com/serengil/deepface_models la primera vez que
